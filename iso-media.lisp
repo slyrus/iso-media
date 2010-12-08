@@ -11,6 +11,10 @@
            #:read-32-bit-int
 
            #:media-type-string
+           #:media-type-vector
+           #:media-type-vector-to-int
+           #:media-type-string-to-int
+
            #:find-box-type
 
            #:read-iso-media-box-info
@@ -29,8 +33,18 @@
 (defun media-type-string (type-int)
   (map 'string #'code-char type-int))
 
+(defun media-type-vector (type-string)
+  (map 'vector #'char-code type-string))
+
+(defun media-type-vector-to-int (type-vector)
+  (reduce (lambda (x y) (+ (ash x 8) y)) type-vector))
+
+(defun media-type-string-to-int (type-string)
+  (media-type-vector-to-int (map 'vector #'char-code type-string)))
+
+
 (defun find-box-type (type box-list)
-  (find (map 'vector #'char-code type)
+  (find (media-type-vector type)
         box-list
         :key #'iso-media-box-type
         :test #'equalp))
@@ -78,15 +92,20 @@
 ;; NOTE!!! remember that the size of the data we want to read is 8
 ;; less than the size of the box! We could fix that here, but
 ;; currently we're relying on the caller to make that adjustment!
-(defun read-iso-media-box-data (size stream)
+(defun read-iso-media-box-data-bytes (size stream)
   (read-n-bytes stream size))
 
-(defun read-iso-media-box (stream)
+(defun read-iso-media-box-raw (stream)
   (destructuring-bind (box-size box-type)
       (read-iso-media-box-info stream)
     (when box-size
-      (let ((box-data (read-iso-media-box-data (- box-size 8) stream)))
+      (let ((box-data (read-iso-media-box-data-bytes (- box-size 8) stream)))
         (make-iso-media-box box-size box-type box-data)))))
+
+(defun read-iso-media-stream-raw (stream)
+  (loop for box = (read-iso-media-box-raw stream)
+     while box
+     collect box))
 
 (defun do-iso-media-stream (stream fn)
   (loop for (size type) = (read-iso-media-box-info stream)
@@ -105,22 +124,60 @@
                                      (cons box acc)))
       acc))
 
+(defparameter *iso-media-box-type-vector-hash* (make-hash-table :test 'equalp))
+(defparameter *iso-media-box-type-string-hash* (make-hash-table :test 'equalp))
+
+(map nil (lambda (x)
+       (let ((vec (media-type-vector x)))
+         (setf (gethash (media-type-vector x) *iso-media-box-type-vector-hash*)
+               vec)
+         (setf (gethash x *iso-media-box-type-string-hash*)
+               vec)))
+     nil)
+
+(defparameter *iso-media-box-container-types*
+  (map 'vector #'media-type-vector
+       '("moov" "trak" "mdia" "minf" "stbl")))
+
+(defun media-box-container-type-p (type)
+  (find type *iso-media-box-container-types* :test 'equalp))
+
+(defgeneric %read-iso-media-box (type-dispatch type size stream))
+
+;; (defmethod %read-iso-media-box ((type (eql (gethash "stbl" *iso-media-box-type-string-hash*))) size stream)
+;;   (%make-iso-media-box size type stream))
+
+(defmethod %read-iso-media-box ((type-dispatch (eql :container)) type size stream)
+  (make-iso-media-box size type (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
+
+(defmethod %read-iso-media-box ((type-dispatch (eql nil)) type size stream)
+  (let ((disp (gethash type *iso-media-box-type-vector-hash*)))
+    (cond (disp
+           (%read-iso-media-box disp type size stream))
+          ((media-box-container-type-p type)
+           (%read-iso-media-box :container type size stream))
+          (t (make-iso-media-box size type (read-iso-media-box-data-bytes (- size 8) stream))))))
+
+(defun read-iso-media-box-data (size type stream)
+  (cond
+    ((media-box-container-type-p type)
+     (make-iso-media-box size
+                         type
+                         (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
+    (t (%read-iso-media-box nil type size stream))))
+
+(defun read-iso-media-box (stream)
+  (destructuring-bind (box-size box-type)
+      (read-iso-media-box-info stream)
+    (when box-size
+      (read-iso-media-box-data box-size box-type stream))))
+
 (defun read-iso-media-stream (stream)
   (do-iso-media-stream
       stream
     (lambda (size type stream)
-      (cond
-        ((equalp type (map 'vector #'char-code "moov"))
-         (make-iso-media-box size
-                             type
-                             (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
-        (t 
-         (make-iso-media-box size type (read-iso-media-box-data (- size 8) stream)))))))
+      (read-iso-media-box-data size type stream))))
 
-(defun read-iso-media-stream-raw (stream)
-  (loop for box = (read-iso-media-box stream)
-     while box
-     collect box))
 
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
