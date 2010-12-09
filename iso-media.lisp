@@ -18,6 +18,8 @@
            #:media-type-string-to-int
 
            #:find-box-type
+           #:find-ancestor
+           #:find-child
 
            #:read-box-info
            #:read-box-data
@@ -66,9 +68,22 @@
                  :box-size size
                  :box-type type))
 
+(defun %find-ancestor (box type)
+  (let ((anc (box-parent box)))
+    (when anc
+      (if (equalp (box-type anc) type)
+          anc
+          (%find-ancestor anc type)))))
+
+(defun find-ancestor (box type)
+  (%find-ancestor box (media-type-vector type)))
+
 ;;; boxes with children
 (defclass container-box (box)
   ((box-children :accessor box-children :initarg :box-children)))
+
+(defun find-child (box type)
+  (find-box-type type (box-children box)))
 
 ;;; boxes with data
 (defclass data-box (box)
