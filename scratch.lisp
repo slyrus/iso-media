@@ -14,43 +14,27 @@
 (let ((file *test-file*))
   (read-iso-media-file file))
 
-(let ((file *test-file*))
-  (box-children
-   (first
-    (remove-if-not (lambda (box)
-                     (equalp (box-type box)
-                             (map 'vector #'char-code "moov")))
-                   (read-iso-media-file file)))))
 
 (let ((file *test-file*))
-  (find-box-type "mvhd"
-                 (box-children
-                  (find-box-type "moov" (read-iso-media-file file)))))
+  (find-child (find-child (read-iso-media-file file) "moov") "mvhd"))
 
 (let ((file *test-file*))
-  (find-box-type "trak"
-                 (box-children
-                  (find-box-type "moov" (read-iso-media-file file)))))
+  (find-child (find-child (read-iso-media-file file) "moov") "trak"))
 
 
 (let ((file *test-file*))
-  (map 'list (lambda (x)
-               (list (media-type-string (box-type x))
-                     (map 'string #'code-char (box-data x))))
-       (reduce (lambda (x y)
-                 (box-children
-                  (find-box-type y x)))
-               (list
-                (read-iso-media-file file)
-                "moov" "trak" "mdia" "minf" "stbl"))))
+  (iso-media::find-ancestor
+   (find-child
+    (reduce #'find-child
+            (list
+             (read-iso-media-file file)
+             "moov" "trak" "mdia" "minf" "stbl"))
+    "stsd")
+   "trak"))
 
 
 (let ((file *test-file*))
-  (find-box-type
-   "stsd"
-   (reduce (lambda (x y)
-             (box-children
-              (find-box-type y x)))
-           (list
-            (read-iso-media-file file)
-            "moov" "trak" "mdia" "minf" "stbl"))))
+  (reduce #'find-child
+          (list
+           (read-iso-media-file file)
+           "moov" "trak" "mdia" "minf" "stbl")))
