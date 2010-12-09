@@ -166,7 +166,6 @@
            collect (read-next-box stream box))))
 
 (defun read-next-box (stream parent)
-  (declare (optimize (debug 3)))
   (destructuring-bind (box-size box-type)
       (read-box-info stream)
     (when (and box-size (plusp box-size))
