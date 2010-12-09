@@ -62,8 +62,9 @@
                  (type box-type)) object
       (format stream "~s :size ~d" (media-type-string type) size))))
 
-(defun make-box (size type &key (class 'box))
+(defun make-box (size type &key (class 'box) parent)
   (make-instance class
+                 :box-parent parent
                  :box-size size
                  :box-type type))
 
@@ -71,8 +72,9 @@
 (defclass container-box (box)
   ((box-children :accessor box-children :initarg :box-children)))
 
-(defun make-container-box (size type children &key (class 'container-box))
+(defun make-container-box (size type children &key (class 'container-box) parent)
   (make-instance class
+                 :box-parent parent
                  :box-size size
                  :box-type type
                  :box-children children))
@@ -81,8 +83,9 @@
 (defclass data-box (box)
   ((box-data :accessor box-data :initarg :box-data)))
 
-(defun make-data-box (size type data &key (class 'data-box))
+(defun make-data-box (size type data &key (class 'data-box) parent)
   (make-instance class
+                 :box-parent parent
                  :box-size size
                  :box-type type
                  :box-data data))
@@ -92,8 +95,9 @@
   ((box-version :accessor box-version :initarg :box-version)
    (box-flags :accessor box-flags :initarg :box-flags)))
 
-(defun make-full-box (size type version flags &key (class 'full-box))
+(defun make-full-box (size type version flags &key (class 'full-box) parent)
   (make-instance class
+                 :box-parent parent
                  :box-size size
                  :box-type type
                  :box-version version
