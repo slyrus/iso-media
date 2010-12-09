@@ -23,7 +23,7 @@
 
 
 (let ((file *test-file*))
-  (iso-media::find-ancestor
+  (find-ancestor
    (find-child
     (reduce #'find-child
             (list
