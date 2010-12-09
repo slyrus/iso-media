@@ -6,5 +6,11 @@
   :licence "BSD"
   :description "A library for reading ISO Media (such as MP4) Files"
   :components
-  ((:cl-source-file "iso-media")))
+  ((:cl-source-file "iso-media")
+   (:module 
+    :test
+    :components
+    ((:static-file "audio-test.mp4")))))
+
+
 

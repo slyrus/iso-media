@@ -9,11 +9,12 @@
 (cl:in-package #:iso-media-scratch)
 
 (defparameter *test-file*
-  #P"/Volumes/iTunes_Music/ALAC/The Microscopic Septet/Friday The Thirteenth_ The Micros Play Monk/01 Brilliant Corners.m4a")
+  (asdf:component-pathname
+   (reduce #'asdf:find-component
+           (list nil "iso-media" "test" "audio-test.mp4"))))
 
 (let ((file *test-file*))
   (read-iso-media-file file))
-
 
 (let ((file *test-file*))
   (find-child (find-child (read-iso-media-file file) "moov") "mvhd"))
