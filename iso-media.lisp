@@ -1,10 +1,13 @@
 
 (cl:defpackage #:iso-media
   (:use #:cl)
-  (:export #:box
+  (:export #:iso-container
+           #:children
+
+           #:box
            #:box-type
            #:box-size
-           #:box-children
+           
            #:box-parent
            #:box-data
            #:make-box
@@ -54,14 +57,24 @@
 (defgeneric find-ancestor (node type))
 
 ;;; 
-(defclass iso-file ()
-  ((iso-file-children :accessor iso-file-children :initarg :iso-file-children)))
+(defclass iso-container ()
+  ((children :accessor children :initarg :children)))
 
-(defmethod find-child ((node iso-file) type)
+(defmethod print-object ((object iso-container) stream)
+  (print-unreadable-object (object stream :type t)
+    (with-slots (children) object
+      (format stream ":children ~a" children))))
+
+
+(defmethod find-child ((node iso-container) type)
   (find (media-type-vector type)
-        (iso-file-children node)
+        (children node)
         :key #'box-type
         :test #'equalp))
+
+(defmethod find-ancestor ((node iso-container) type)
+  (declare (ignore type))
+  nil)
 
 ;;; basic box class
 (defclass box ()
@@ -86,17 +99,16 @@
     (when anc
       (if (equalp (box-type anc) type)
           anc
-          (%find-ancestor anc type)))))
+          (find-ancestor anc type)))))
 
 (defmethod find-ancestor ((box box) (type string))
   (find-ancestor box (media-type-vector type)))
 
 ;;; boxes with children
-(defclass container-box (box)
-  ((box-children :accessor box-children :initarg :box-children)))
+(defclass container-box (box iso-container) ())
 
 (defmethod find-child ((box box) type)
-  (find-box-type type (box-children box)))
+  (find-box-type type (children box)))
 
 ;;; boxes with data
 (defclass data-box (box)
@@ -110,6 +122,8 @@
 (defclass sample-description-box (full-box container-box)
   ((box-entry-count :accessor box-entry-count :initarg :box-entry-count)))
 
+(defclass movie-data-box (data-box) ())
+
 (defclass sample-entry-box (box) ())
 
 (defclass audio-sample-entry-box (sample-entry-box) 
@@ -122,6 +136,9 @@
   (let ((buf (make-array n :element-type '(unsigned-byte 8))))
     (let ((bytes-read (read-sequence buf stream)))
       (values buf bytes-read))))
+
+(defun skip-n-bytes (stream n)
+  (file-position stream (+ (file-position stream) n)))
 
 (defun read-32-bit-int (stream)
   (multiple-value-bind (buf bytes-read) 
@@ -164,15 +181,23 @@
        ("mdia" container-box)
        ("minf" container-box)
        ("stbl" container-box)
-       ("stsd" sample-description-box)))
+       ("stsd" sample-description-box)
+       ("mdat" movie-data-box)))
 
 (defgeneric %read-box (box type size stream))
 
 (defmethod %read-box ((box data-box) type size stream)
   (setf (box-data box) (read-box-data-bytes (- size 8) stream)))
 
+(defparameter *read-movie-data* nil)
+
+(defmethod %read-box ((box movie-data-box) type size stream)
+  (if *read-movie-data*
+      (call-next-method)
+      (skip-n-bytes stream (- size 8))))
+
 (defmethod %read-box ((box container-box) type size stream)
-  (setf (box-children box) (nreverse (read-iso-media-stream-boxes stream (- size 8) box))))
+  (setf (children box) (nreverse (read-iso-media-stream-boxes stream (- size 8) box))))
 
 (defmethod %read-box ((box full-box) type size stream)
   (setf (box-version box) (read-byte stream))
@@ -189,7 +214,7 @@
                                                             (read-byte stream)
                                                             (read-byte stream))))
   (setf (box-entry-count box) (read-32-bit-int stream))
-  (setf (box-children box)
+  (setf (children box)
         (loop for i below (box-entry-count box)
            collect (read-next-box stream box))))
 
@@ -204,12 +229,13 @@
 
 ;;; reading streams and files
 (defun read-iso-media-stream (stream)
-  (make-instance 'iso-file
-                 :iso-file-children
-                 (loop for box = (read-next-box stream nil)
-                    while box 
-                    collect box)))
-  
+  (let ((container (make-instance 'iso-container)))
+    (setf (children container)
+          (loop for box = (read-next-box stream container)
+             while box 
+             collect box))
+    container))
+
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (read-iso-media-stream stream)))
