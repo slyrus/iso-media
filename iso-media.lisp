@@ -124,6 +124,13 @@
                                      (cons box acc)))
       acc))
 
+(defparameter *iso-media-box-container-types*
+  (map 'vector #'media-type-vector
+       '("moov" "trak" "mdia" "minf" "stbl")))
+
+(defun media-box-container-type-p (type)
+  (find type *iso-media-box-container-types* :test 'equalp))
+
 (defparameter *iso-media-box-type-vector-hash* (make-hash-table :test 'equalp))
 (defparameter *iso-media-box-type-string-hash* (make-hash-table :test 'equalp))
 
@@ -133,38 +140,24 @@
                vec)
          (setf (gethash x *iso-media-box-type-string-hash*)
                vec)))
-     nil)
-
-(defparameter *iso-media-box-container-types*
-  (map 'vector #'media-type-vector
-       '("moov" "trak" "mdia" "minf" "stbl")))
-
-(defun media-box-container-type-p (type)
-  (find type *iso-media-box-container-types* :test 'equalp))
+     '("stsd"))
 
 (defgeneric %read-iso-media-box (type-dispatch type size stream))
 
-;; (defmethod %read-iso-media-box ((type (eql (gethash "stbl" *iso-media-box-type-string-hash*))) size stream)
-;;   (%make-iso-media-box size type stream))
+(defmethod %read-iso-media-box ((type-dispatch (eql (gethash "stsd" *iso-media-box-type-string-hash*)))
+                                type size stream)
+  (make-iso-media-box size type (read-iso-media-box-data-bytes (- size 8) stream)))
 
 (defmethod %read-iso-media-box ((type-dispatch (eql :container)) type size stream)
   (make-iso-media-box size type (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
 
-(defmethod %read-iso-media-box ((type-dispatch (eql nil)) type size stream)
+(defun read-iso-media-box-data (size type stream)
   (let ((disp (gethash type *iso-media-box-type-vector-hash*)))
     (cond (disp
            (%read-iso-media-box disp type size stream))
           ((media-box-container-type-p type)
            (%read-iso-media-box :container type size stream))
           (t (make-iso-media-box size type (read-iso-media-box-data-bytes (- size 8) stream))))))
-
-(defun read-iso-media-box-data (size type stream)
-  (cond
-    ((media-box-container-type-p type)
-     (make-iso-media-box size
-                         type
-                         (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
-    (t (%read-iso-media-box nil type size stream))))
 
 (defun read-iso-media-box (stream)
   (destructuring-bind (box-size box-type)
