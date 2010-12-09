@@ -50,6 +50,19 @@
         :key #'box-type
         :test #'equalp))
 
+(defgeneric find-child (node type))
+(defgeneric find-ancestor (node type))
+
+;;; 
+(defclass iso-file ()
+  ((iso-file-children :accessor iso-file-children :initarg :iso-file-children)))
+
+(defmethod find-child ((node iso-file) type)
+  (find (media-type-vector type)
+        (iso-file-children node)
+        :key #'box-type
+        :test #'equalp))
+
 ;;; basic box class
 (defclass box ()
   ((box-parent :accessor box-parent :initarg :box-parent)
@@ -68,21 +81,21 @@
                  :box-size size
                  :box-type type))
 
-(defun %find-ancestor (box type)
+(defmethod find-ancestor ((box box) (type vector))
   (let ((anc (box-parent box)))
     (when anc
       (if (equalp (box-type anc) type)
           anc
           (%find-ancestor anc type)))))
 
-(defun find-ancestor (box type)
-  (%find-ancestor box (media-type-vector type)))
+(defmethod find-ancestor ((box box) (type string))
+  (find-ancestor box (media-type-vector type)))
 
 ;;; boxes with children
 (defclass container-box (box)
   ((box-children :accessor box-children :initarg :box-children)))
 
-(defun find-child (box type)
+(defmethod find-child ((box box) type)
   (find-box-type type (box-children box)))
 
 ;;; boxes with data
@@ -191,9 +204,11 @@
 
 ;;; reading streams and files
 (defun read-iso-media-stream (stream)
-  (loop for box = (read-next-box stream nil)
-     while box 
-     collect box))
+  (make-instance 'iso-file
+                 :iso-file-children
+                 (loop for box = (read-next-box stream nil)
+                    while box 
+                    collect box)))
   
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
