@@ -4,6 +4,7 @@
   (:export #:box
            #:box-type
            #:box-size
+           #:box-children
            #:box-data
            #:make-box
            
@@ -49,16 +50,11 @@
         :key #'box-type
         :test #'equalp))
 
+;;; basic box class
 (defclass box ()
-  ((box-size :accessor box-size :initarg :box-size)
-   (box-type :accessor box-type :initarg :box-type)
-   (box-data :accessor box-data :initarg :box-data)))
-
-(defun make-box (size type data)
-  (make-instance 'box
-                 :box-size size
-                 :box-type type
-                 :box-data data))
+  ((box-parent :accessor box-parent :initarg :box-parent)
+   (box-size :accessor box-size :initarg :box-size)
+   (box-type :accessor box-type :initarg :box-type)))
 
 (defmethod print-object ((object box) stream)
   (print-unreadable-object (object stream :type t)
@@ -66,6 +62,52 @@
                  (type box-type)) object
       (format stream "~s :size ~d" (media-type-string type) size))))
 
+(defun make-box (size type &key (class 'box))
+  (make-instance class
+                 :box-size size
+                 :box-type type))
+
+;;; boxes with children
+(defclass container-box (box)
+  ((box-children :accessor box-children :initarg :box-children)))
+
+(defun make-container-box (size type children &key (class 'container-box))
+  (make-instance class
+                 :box-size size
+                 :box-type type
+                 :box-children children))
+
+;;; boxes with data
+(defclass data-box (box)
+  ((box-data :accessor box-data :initarg :box-data)))
+
+(defun make-data-box (size type data &key (class 'data-box))
+  (make-instance class
+                 :box-size size
+                 :box-type type
+                 :box-data data))
+
+;;; "full" box as per the spec
+(defclass full-box (box)
+  ((box-version :accessor box-version :initarg :box-version)
+   (box-flags :accessor box-flags :initarg :box-flags)))
+
+(defun make-full-box (size type version flags &key (class 'full-box))
+  (make-instance class
+                 :box-size size
+                 :box-type type
+                 :box-version version
+                 :box-flags flags))
+
+(defclass sample-description-box (full-box container-box)
+  ((box-entry-count :accessor box-entry-count :initarg :box-entry-count)))
+
+(defclass sample-entry-box (box) ())
+
+(defclass audio-sample-entry-box (sample-entry-box) 
+  ((channel-count :accessor channel-count :initarg :channel-count)
+   (sample-size :accessor sample-size :initarg :sample-size)
+   (sample-rate :accessor sample-rate :initarg :sample-rate)))
 
 ;;; stream reading utlities
 (defun read-n-bytes (stream n)
@@ -95,18 +137,6 @@
 (defun read-box-data-bytes (size stream)
   (read-n-bytes stream size))
 
-(defun read-box-raw (stream)
-  (destructuring-bind (box-size box-type)
-      (read-box-info stream)
-    (when box-size
-      (let ((box-data (read-box-data-bytes (- box-size 8) stream)))
-        (make-box box-size box-type box-data)))))
-
-(defun read-iso-media-stream-raw (stream)
-  (loop for box = (read-box-raw stream)
-     while box
-     collect box))
-
 (defun do-iso-media-stream (stream fn)
   (loop for (size type) = (read-box-info stream)
      while (and size (plusp size)) 
@@ -118,59 +148,70 @@
 
 (defun read-iso-media-stream-boxes (stream limit &optional acc)
   (if (plusp limit)
-      (let ((box (read-box stream)))
+      (let ((box (read-next-box stream)))
         (read-iso-media-stream-boxes stream
                                      (- limit (box-size box))
                                      (cons box acc)))
       acc))
 
-(defparameter *box-container-types*
-  (map 'vector #'media-type-vector
-       '("moov" "trak" "mdia" "minf" "stbl")))
-
-(defun media-box-container-type-p (type)
-  (find type *box-container-types* :test 'equalp))
-
-(defparameter *box-type-vector-hash* (make-hash-table :test 'equalp))
-(defparameter *box-type-string-hash* (make-hash-table :test 'equalp))
-
+;;; machinery for reading boxes
+(defparameter *box-type-hash* (make-hash-table :test 'equalp))
 (map nil (lambda (x)
-       (let ((vec (media-type-vector x)))
-         (setf (gethash (media-type-vector x) *box-type-vector-hash*)
-               vec)
-         (setf (gethash x *box-type-string-hash*)
-               vec)))
-     '("stsd"))
+           (destructuring-bind (type class) x
+             (setf (gethash (media-type-vector type) *box-type-hash*) class)))
+     '(("moov" container-box)
+       ("trak" container-box)
+       ("mdia" container-box)
+       ("minf" container-box)
+       ("stbl" container-box)
+       ("stsd" sample-description-box)))
 
-(defgeneric %read-box (type-dispatch type size stream))
+(defgeneric %read-box (box type size stream))
 
-(defmethod %read-box ((type-dispatch (eql (gethash "stsd" *box-type-string-hash*)))
-                                type size stream)
-  (make-box size type (read-box-data-bytes (- size 8) stream)))
+(defmethod %read-box ((box data-box) type size stream)
+  (setf (box-data box) (read-box-data-bytes (- size 8) stream)))
 
-(defmethod %read-box ((type-dispatch (eql :container)) type size stream)
-  (make-box size type (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
+(defmethod %read-box ((box container-box) type size stream)
+  (setf (box-children box) (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
+
+(defmethod %read-box ((box full-box) type size stream)
+  (setf (box-version box) (read-byte stream))
+  (setf (box-flags box) (make-array 3
+                                    :initial-contents (list (read-byte stream)
+                                                            (read-byte stream)
+                                                            (read-byte stream))))
+  (read-n-bytes stream (- size 8 4)))
+
+(defmethod %read-box ((box sample-description-box) type size stream)
+  (setf (box-version box) (read-byte stream))
+  (setf (box-flags box) (make-array 3
+                                    :initial-contents (list (read-byte stream)
+                                                            (read-byte stream)
+                                                            (read-byte stream))))
+  (setf (box-entry-count box) (read-32-bit-int stream))
+  (setf (box-children box)
+        (loop for i below (box-entry-count box)
+           collect (read-next-box stream))))
 
 (defun read-box-data (size type stream)
-  (let ((disp (gethash type *box-type-vector-hash*)))
-    (cond (disp
-           (%read-box disp type size stream))
-          ((media-box-container-type-p type)
-           (%read-box :container type size stream))
-          (t (make-box size type (read-box-data-bytes (- size 8) stream))))))
+  (declare (optimize (debug 3)))
+  (let* ((class (or (gethash type *box-type-hash*) 'data-box))
+         (box (make-box size type :class class)))
+    (%read-box box type size stream)
+    box))
 
-(defun read-box (stream)
+(defun read-next-box (stream)
   (destructuring-bind (box-size box-type)
       (read-box-info stream)
     (when box-size
       (read-box-data box-size box-type stream))))
 
+;;; reading streams and files
 (defun read-iso-media-stream (stream)
   (do-iso-media-stream
       stream
     (lambda (size type stream)
       (read-box-data size type stream))))
-
 
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))

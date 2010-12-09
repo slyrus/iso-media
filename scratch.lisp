@@ -15,7 +15,7 @@
   (read-iso-media-file file))
 
 (let ((file *test-file*))
-  (box-data
+  (box-children
    (first
     (remove-if-not (lambda (box)
                      (equalp (box-type box)
@@ -24,12 +24,12 @@
 
 (let ((file *test-file*))
   (find-box-type "mvhd"
-                 (box-data
+                 (box-children
                   (find-box-type "moov" (read-iso-media-file file)))))
 
 (let ((file *test-file*))
   (find-box-type "trak"
-                 (box-data
+                 (box-children
                   (find-box-type "moov" (read-iso-media-file file)))))
 
 
@@ -38,7 +38,7 @@
                (list (media-type-string (box-type x))
                      (map 'string #'code-char (box-data x))))
        (reduce (lambda (x y)
-                 (box-data
+                 (box-children
                   (find-box-type y x)))
                (list
                 (read-iso-media-file file)
@@ -46,10 +46,11 @@
 
 
 (let ((file *test-file*))
-  (map 'string #'code-char
-       (reduce (lambda (x y)
-                 (box-data
-                  (find-box-type y x)))
-               (list
-                (read-iso-media-file file)
-                "moov" "trak" "mdia" "minf" "stbl" "stsd"))))
+  (find-box-type
+   "stsd"
+   (reduce (lambda (x y)
+             (box-children
+              (find-box-type y x)))
+           (list
+            (read-iso-media-file file)
+            "moov" "trak" "mdia" "minf" "stbl"))))
