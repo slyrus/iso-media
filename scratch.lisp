@@ -15,45 +15,40 @@
   (read-iso-media-file file))
 
 (let ((file *test-file*))
-  (iso-media-box-data
+  (box-data
    (first
     (remove-if-not (lambda (box)
-                     (equalp (iso-media-box-type box)
+                     (equalp (box-type box)
                              (map 'vector #'char-code "moov")))
                    (read-iso-media-file file)))))
 
 (let ((file *test-file*))
   (find-box-type "mvhd"
-                 (iso-media-box-data
+                 (box-data
                   (find-box-type "moov" (read-iso-media-file file)))))
 
 (let ((file *test-file*))
   (find-box-type "trak"
-                 (iso-media-box-data
+                 (box-data
                   (find-box-type "moov" (read-iso-media-file file)))))
 
 
 (let ((file *test-file*))
   (map 'list (lambda (x)
-               (list (media-type-string (iso-media-box-type x))
-                     (map 'string #'code-char (iso-media-box-data x))))
-       (iso-media-box-data
-        (find-box-type "stbl"
-                       (iso-media-box-data
-                        (find-box-type "minf"
-                                       (iso-media-box-data
-                                        (find-box-type "mdia"
-                                                       (iso-media-box-data
-                                                        (find-box-type "trak"
-                                                                       (iso-media-box-data
-                                                                        (find-box-type "moov"
-                                                                                       (read-iso-media-file file)))))))))))))
+               (list (media-type-string (box-type x))
+                     (map 'string #'code-char (box-data x))))
+       (reduce (lambda (x y)
+                 (box-data
+                  (find-box-type y x)))
+               (list
+                (read-iso-media-file file)
+                "moov" "trak" "mdia" "minf" "stbl"))))
 
 
 (let ((file *test-file*))
   (map 'string #'code-char
        (reduce (lambda (x y)
-                 (iso-media-box-data
+                 (box-data
                   (find-box-type y x)))
                (list
                 (read-iso-media-file file)

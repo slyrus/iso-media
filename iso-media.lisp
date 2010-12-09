@@ -1,11 +1,11 @@
 
 (cl:defpackage #:iso-media
   (:use #:cl)
-  (:export #:iso-media-box
-           #:iso-media-box-type
-           #:iso-media-box-size
-           #:iso-media-box-data
-           #:make-iso-media-box
+  (:export #:box
+           #:box-type
+           #:box-size
+           #:box-data
+           #:make-box
            
            #:read-n-bytes
            #:read-32-bit-int
@@ -17,10 +17,10 @@
 
            #:find-box-type
 
-           #:read-iso-media-box-info
-           #:read-iso-media-box-data
-           #:read-iso-media-box
-           #:read-iso-media-boxes
+           #:read-box-info
+           #:read-box-data
+           #:read-box
+           #:read-boxes
            
            #:do-iso-media-stream
            #:do-iso-media-file
@@ -46,24 +46,24 @@
 (defun find-box-type (type box-list)
   (find (media-type-vector type)
         box-list
-        :key #'iso-media-box-type
+        :key #'box-type
         :test #'equalp))
 
-(defclass iso-media-box ()
-  ((iso-media-box-size :accessor iso-media-box-size :initarg :iso-media-box-size)
-   (iso-media-box-type :accessor iso-media-box-type :initarg :iso-media-box-type)
-   (iso-media-box-data :accessor iso-media-box-data :initarg :iso-media-box-data)))
+(defclass box ()
+  ((box-size :accessor box-size :initarg :box-size)
+   (box-type :accessor box-type :initarg :box-type)
+   (box-data :accessor box-data :initarg :box-data)))
 
-(defun make-iso-media-box (size type data)
-  (make-instance 'iso-media-box
-                 :iso-media-box-size size
-                 :iso-media-box-type type
-                 :iso-media-box-data data))
+(defun make-box (size type data)
+  (make-instance 'box
+                 :box-size size
+                 :box-type type
+                 :box-data data))
 
-(defmethod print-object ((object iso-media-box) stream)
+(defmethod print-object ((object box) stream)
   (print-unreadable-object (object stream :type t)
-    (with-slots ((size iso-media-box-size)
-                 (type iso-media-box-type)) object
+    (with-slots ((size box-size)
+                 (type box-type)) object
       (format stream "~s :size ~d" (media-type-string type) size))))
 
 
@@ -83,7 +83,7 @@
 ;; reading ISO media files
 ;; spec can be found here: http://standards.iso.org/ittf/PubliclyAvailableStandards/c041828_ISO_IEC_14496-12_2005(E).zip
 ;;
-(defun read-iso-media-box-info (stream)
+(defun read-box-info (stream)
   ;; FIXME need to handle 64-bit sizes here!!!
   (let* ((box-size (read-32-bit-int stream))
          (box-type (read-n-bytes stream 4)))
@@ -92,23 +92,23 @@
 ;; NOTE!!! remember that the size of the data we want to read is 8
 ;; less than the size of the box! We could fix that here, but
 ;; currently we're relying on the caller to make that adjustment!
-(defun read-iso-media-box-data-bytes (size stream)
+(defun read-box-data-bytes (size stream)
   (read-n-bytes stream size))
 
-(defun read-iso-media-box-raw (stream)
+(defun read-box-raw (stream)
   (destructuring-bind (box-size box-type)
-      (read-iso-media-box-info stream)
+      (read-box-info stream)
     (when box-size
-      (let ((box-data (read-iso-media-box-data-bytes (- box-size 8) stream)))
-        (make-iso-media-box box-size box-type box-data)))))
+      (let ((box-data (read-box-data-bytes (- box-size 8) stream)))
+        (make-box box-size box-type box-data)))))
 
 (defun read-iso-media-stream-raw (stream)
-  (loop for box = (read-iso-media-box-raw stream)
+  (loop for box = (read-box-raw stream)
      while box
      collect box))
 
 (defun do-iso-media-stream (stream fn)
-  (loop for (size type) = (read-iso-media-box-info stream)
+  (loop for (size type) = (read-box-info stream)
      while (and size (plusp size)) 
      collect (funcall fn size type stream)))
 
@@ -118,58 +118,58 @@
 
 (defun read-iso-media-stream-boxes (stream limit &optional acc)
   (if (plusp limit)
-      (let ((box (read-iso-media-box stream)))
+      (let ((box (read-box stream)))
         (read-iso-media-stream-boxes stream
-                                     (- limit (iso-media-box-size box))
+                                     (- limit (box-size box))
                                      (cons box acc)))
       acc))
 
-(defparameter *iso-media-box-container-types*
+(defparameter *box-container-types*
   (map 'vector #'media-type-vector
        '("moov" "trak" "mdia" "minf" "stbl")))
 
 (defun media-box-container-type-p (type)
-  (find type *iso-media-box-container-types* :test 'equalp))
+  (find type *box-container-types* :test 'equalp))
 
-(defparameter *iso-media-box-type-vector-hash* (make-hash-table :test 'equalp))
-(defparameter *iso-media-box-type-string-hash* (make-hash-table :test 'equalp))
+(defparameter *box-type-vector-hash* (make-hash-table :test 'equalp))
+(defparameter *box-type-string-hash* (make-hash-table :test 'equalp))
 
 (map nil (lambda (x)
        (let ((vec (media-type-vector x)))
-         (setf (gethash (media-type-vector x) *iso-media-box-type-vector-hash*)
+         (setf (gethash (media-type-vector x) *box-type-vector-hash*)
                vec)
-         (setf (gethash x *iso-media-box-type-string-hash*)
+         (setf (gethash x *box-type-string-hash*)
                vec)))
      '("stsd"))
 
-(defgeneric %read-iso-media-box (type-dispatch type size stream))
+(defgeneric %read-box (type-dispatch type size stream))
 
-(defmethod %read-iso-media-box ((type-dispatch (eql (gethash "stsd" *iso-media-box-type-string-hash*)))
+(defmethod %read-box ((type-dispatch (eql (gethash "stsd" *box-type-string-hash*)))
                                 type size stream)
-  (make-iso-media-box size type (read-iso-media-box-data-bytes (- size 8) stream)))
+  (make-box size type (read-box-data-bytes (- size 8) stream)))
 
-(defmethod %read-iso-media-box ((type-dispatch (eql :container)) type size stream)
-  (make-iso-media-box size type (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
+(defmethod %read-box ((type-dispatch (eql :container)) type size stream)
+  (make-box size type (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
 
-(defun read-iso-media-box-data (size type stream)
-  (let ((disp (gethash type *iso-media-box-type-vector-hash*)))
+(defun read-box-data (size type stream)
+  (let ((disp (gethash type *box-type-vector-hash*)))
     (cond (disp
-           (%read-iso-media-box disp type size stream))
+           (%read-box disp type size stream))
           ((media-box-container-type-p type)
-           (%read-iso-media-box :container type size stream))
-          (t (make-iso-media-box size type (read-iso-media-box-data-bytes (- size 8) stream))))))
+           (%read-box :container type size stream))
+          (t (make-box size type (read-box-data-bytes (- size 8) stream))))))
 
-(defun read-iso-media-box (stream)
+(defun read-box (stream)
   (destructuring-bind (box-size box-type)
-      (read-iso-media-box-info stream)
+      (read-box-info stream)
     (when box-size
-      (read-iso-media-box-data box-size box-type stream))))
+      (read-box-data box-size box-type stream))))
 
 (defun read-iso-media-stream (stream)
   (do-iso-media-stream
       stream
     (lambda (size type stream)
-      (read-iso-media-box-data size type stream))))
+      (read-box-data size type stream))))
 
 
 (defun read-iso-media-file (file)
