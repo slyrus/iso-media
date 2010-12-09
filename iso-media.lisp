@@ -23,9 +23,6 @@
            #:read-box
            #:read-boxes
            
-           #:do-iso-media-stream
-           #:do-iso-media-file
-           
            #:read-iso-media-stream
            #:read-iso-media-file))
 
@@ -141,15 +138,6 @@
 (defun read-box-data-bytes (size stream)
   (read-n-bytes stream size))
 
-(defun do-iso-media-stream (stream fn)
-  (loop for (size type) = (read-box-info stream)
-     while (and size (plusp size)) 
-     collect (funcall fn size type stream)))
-
-(defun do-iso-media-file (file fn)
-  (with-open-file (stream file :element-type '(unsigned-byte 8))
-    (do-iso-media-stream stream fn)))
-
 (defun read-iso-media-stream-boxes (stream limit &optional acc)
   (if (plusp limit)
       (let ((box (read-next-box stream)))
@@ -197,26 +185,21 @@
         (loop for i below (box-entry-count box)
            collect (read-next-box stream))))
 
-(defun read-box-data (size type stream)
-  (declare (optimize (debug 3)))
-  (let* ((class (or (gethash type *box-type-hash*) 'data-box))
-         (box (make-box size type :class class)))
-    (%read-box box type size stream)
-    box))
-
 (defun read-next-box (stream)
   (destructuring-bind (box-size box-type)
       (read-box-info stream)
-    (when box-size
-      (read-box-data box-size box-type stream))))
+    (when (and box-size (plusp box-size))
+      (let* ((class (or (gethash box-type *box-type-hash*) 'data-box))
+             (box (make-box box-size box-type :class class)))
+        (%read-box box box-type box-size stream)
+        box))))
 
 ;;; reading streams and files
 (defun read-iso-media-stream (stream)
-  (do-iso-media-stream
-      stream
-    (lambda (size type stream)
-      (read-box-data size type stream))))
-
+  (loop for box = (read-next-box stream)
+     while box 
+     collect box))
+  
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (read-iso-media-stream stream)))
