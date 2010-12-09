@@ -17,25 +17,44 @@
   (read-iso-media-file file))
 
 (let ((file *test-file*))
+  (find-child (read-iso-media-file file) "moov"))
+
+(let ((file *test-file*))
+  (children
+   (find-child (read-iso-media-file file) "moov")))
+
+(let ((file *test-file*))
   (find-child (find-child (read-iso-media-file file) "moov") "mvhd"))
 
 (let ((file *test-file*))
   (find-child (find-child (read-iso-media-file file) "moov") "trak"))
-
-
-(let ((file *test-file*))
-  (find-ancestor
-   (find-child
-    (reduce #'find-child
-            (list
-             (read-iso-media-file file)
-             "moov" "trak" "mdia" "minf" "stbl"))
-    "stsd")
-   "trak"))
-
 
 (let ((file *test-file*))
   (reduce #'find-child
           (list
            (read-iso-media-file file)
            "moov" "trak" "mdia" "minf" "stbl")))
+
+(let ((file *test-file*))
+  (children
+   (reduce #'find-child
+           (list
+            (read-iso-media-file file)
+            "moov" "trak" "mdia" "minf" "stbl" "stsd"))))
+
+(let ((file *test-file*))
+  (find-child
+   (find-ancestor
+    (find-child
+     (reduce #'find-child
+             (list
+              (read-iso-media-file file)
+              "moov" "trak" "mdia" "minf" "stbl"))
+     "stsd")
+    "minf")
+   "smhd"))
+
+
+(let ((file *test-file*))
+  (iso-media::audio-sample-type (read-iso-media-file file)))
+

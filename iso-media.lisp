@@ -122,7 +122,8 @@
 (defclass sample-description-box (full-box container-box)
   ((box-entry-count :accessor box-entry-count :initarg :box-entry-count)))
 
-(defclass movie-data-box (data-box) ())
+(defclass movie-data-box (data-box)
+  ((box-data-position :accessor box-data-position :initarg :box-data-position)))
 
 (defclass sample-entry-box (box) ())
 
@@ -192,6 +193,7 @@
 (defparameter *read-movie-data* nil)
 
 (defmethod %read-box ((box movie-data-box) type size stream)
+  (setf (box-data-position box) (file-position stream))
   (if *read-movie-data*
       (call-next-method)
       (skip-n-bytes stream (- size 8))))
@@ -239,3 +241,14 @@
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (read-iso-media-stream stream)))
+
+
+(defun audio-sample-type (iso-container)
+  (media-type-string
+   (box-type
+    (first
+     (children
+      (reduce #'find-child
+              (list
+               iso-container
+               "moov" "trak" "mdia" "minf" "stbl" "stsd")))))))
