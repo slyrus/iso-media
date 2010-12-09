@@ -5,6 +5,7 @@
            #:box-type
            #:box-size
            #:box-children
+           #:box-parent
            #:box-data
            #:make-box
            
@@ -69,36 +70,14 @@
 (defclass container-box (box)
   ((box-children :accessor box-children :initarg :box-children)))
 
-(defun make-container-box (size type children &key (class 'container-box) parent)
-  (make-instance class
-                 :box-parent parent
-                 :box-size size
-                 :box-type type
-                 :box-children children))
-
 ;;; boxes with data
 (defclass data-box (box)
   ((box-data :accessor box-data :initarg :box-data)))
-
-(defun make-data-box (size type data &key (class 'data-box) parent)
-  (make-instance class
-                 :box-parent parent
-                 :box-size size
-                 :box-type type
-                 :box-data data))
 
 ;;; "full" box as per the spec
 (defclass full-box (box)
   ((box-version :accessor box-version :initarg :box-version)
    (box-flags :accessor box-flags :initarg :box-flags)))
-
-(defun make-full-box (size type version flags &key (class 'full-box) parent)
-  (make-instance class
-                 :box-parent parent
-                 :box-size size
-                 :box-type type
-                 :box-version version
-                 :box-flags flags))
 
 (defclass sample-description-box (full-box container-box)
   ((box-entry-count :accessor box-entry-count :initarg :box-entry-count)))
@@ -138,11 +117,12 @@
 (defun read-box-data-bytes (size stream)
   (read-n-bytes stream size))
 
-(defun read-iso-media-stream-boxes (stream limit &optional acc)
+(defun read-iso-media-stream-boxes (stream limit parent &optional acc)
   (if (plusp limit)
-      (let ((box (read-next-box stream)))
+      (let ((box (read-next-box stream parent)))
         (read-iso-media-stream-boxes stream
                                      (- limit (box-size box))
+                                     parent
                                      (cons box acc)))
       acc))
 
@@ -164,7 +144,7 @@
   (setf (box-data box) (read-box-data-bytes (- size 8) stream)))
 
 (defmethod %read-box ((box container-box) type size stream)
-  (setf (box-children box) (nreverse (read-iso-media-stream-boxes stream (- size 8)))))
+  (setf (box-children box) (nreverse (read-iso-media-stream-boxes stream (- size 8) box))))
 
 (defmethod %read-box ((box full-box) type size stream)
   (setf (box-version box) (read-byte stream))
@@ -183,20 +163,21 @@
   (setf (box-entry-count box) (read-32-bit-int stream))
   (setf (box-children box)
         (loop for i below (box-entry-count box)
-           collect (read-next-box stream))))
+           collect (read-next-box stream box))))
 
-(defun read-next-box (stream)
+(defun read-next-box (stream parent)
+  (declare (optimize (debug 3)))
   (destructuring-bind (box-size box-type)
       (read-box-info stream)
     (when (and box-size (plusp box-size))
       (let* ((class (or (gethash box-type *box-type-hash*) 'data-box))
-             (box (make-box box-size box-type :class class)))
+             (box (make-box box-size box-type :class class :parent parent)))
         (%read-box box box-type box-size stream)
         box))))
 
 ;;; reading streams and files
 (defun read-iso-media-stream (stream)
-  (loop for box = (read-next-box stream)
+  (loop for box = (read-next-box stream nil)
      while box 
      collect box))
   
