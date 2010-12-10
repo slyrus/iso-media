@@ -30,7 +30,9 @@
            #:read-boxes
            
            #:read-iso-media-stream
-           #:read-iso-media-file))
+           #:read-iso-media-file
+           
+           #:audio-sample-type))
 
 (cl:in-package #:iso-media)
 
