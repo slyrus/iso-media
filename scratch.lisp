@@ -1,7 +1,6 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (asdf:oos 'asdf:load-op 'iso-media)
-  (asdf:oos 'asdf:load-op 'alexandria))
+  (asdf:oos 'asdf:load-op 'iso-media))
 
 (cl:defpackage #:iso-media-scratch
   (:use #:cl #:iso-media))
