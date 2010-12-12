@@ -57,3 +57,9 @@
 (let ((file *test-file*))
   (iso-media::audio-sample-type (read-iso-media-file file)))
 
+
+(defparameter *cc*
+  (read-iso-media-file
+   #p"/Volumes/iTunes_music/Archive/The Clash/Live_ From Here to Eternity/01 Complete Control.m4a"))
+
+(find-child (find-child *cc* "moov") "mvhd")
