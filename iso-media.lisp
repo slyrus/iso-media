@@ -164,6 +164,9 @@
 
 (defparameter *read-movie-data* nil)
 
+(defun prepend-copyright-symbol (string)
+  (concatenate 'string (string (code-char 169)) string))
+
 ;;; machinery for reading boxes
 (defparameter *box-type-hash* (make-hash-table :test 'equalp))
 (progn 
@@ -171,7 +174,7 @@
   (map nil (lambda (x)
              (destructuring-bind (type class) x
                (setf (gethash (media-type-vector type) *box-type-hash*) class)))
-       '(("moov" container-box)
+       `(("moov" container-box)
          ("trak" container-box)
          ("mdia" container-box)
          ("minf" container-box)
@@ -180,24 +183,24 @@
          ("udta" user-data-box)
          ("meta" meta-box)
          ("mdat" movie-data-box)
-
+         
          ("mvhd" full-box)
          ("tkhd" full-box)
          ("mdhd" full-box)
-              
+         
          ("ilst" container-box)
-         ("©nam" container-box)
-         ("©ART" container-box)
+         (,(prepend-copyright-symbol "nam") container-box)
+         (,(prepend-copyright-symbol "ART") container-box)
          ("aART" container-box)
-         ("©alb" container-box)
-         ("©grp" container-box)
-         ("©day" container-box)
+         (,(prepend-copyright-symbol "alb") container-box)
+         (,(prepend-copyright-symbol "grp") container-box)
+         (,(prepend-copyright-symbol "day") container-box)
          ("trkn" container-box)
          ("disk" container-box)
          ("tmpo" container-box)
-         ("©wrt" container-box)
-         ("©cmt" container-box)
-         ("©gen" container-box)
+         (,(prepend-copyright-symbol "wrt") container-box)
+         (,(prepend-copyright-symbol "cmt") container-box)
+         (,(prepend-copyright-symbol "gen") container-box)
          ("gnre" container-box)
          ("cpil" container-box)
          ("tvsh" container-box)
@@ -207,9 +210,9 @@
          ("soal" container-box)
          ("soco" container-box)
          ("sosn" container-box)
-         ("©lyr" container-box)
+         (,(prepend-copyright-symbol "lyr") container-box)
          ("covr" container-box)
-         ("©too" container-box)
+         (,(prepend-copyright-symbol "too") container-box)
 
          ("data" apple-data-box))))
 
