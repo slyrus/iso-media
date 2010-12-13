@@ -64,6 +64,12 @@
 
 (find-child (find-child *cc* "moov") "mvhd")
 
+(map 'string #'code-char
+     (box-data
+      (reduce #'find-child (list *cc* "moov" "udta" "meta" "ilst" "©ART" "data"))))
+
+
 (let ((file #p"/Volumes/iTunes_music/Archive/The Clash/Live_ From Here to Eternity/01 Complete Control.m4a"))
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (iso-media::read-iso-media-stream stream)))
+
