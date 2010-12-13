@@ -121,7 +121,7 @@
   ((box-version :accessor box-version :initarg :box-version)
    (box-flags :accessor box-flags :initarg :box-flags)))
 
-(defclass apple-data-box (full-box)
+(defclass apple-data-box (full-box data-box)
   ((box-4-byte-pad :accessor box-4-byte-pad :initarg :box-4-byte-pad)))
 
 (defclass sample-description-box (full-box container-box)
