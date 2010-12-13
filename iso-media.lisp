@@ -172,50 +172,54 @@
          ("stsd" sample-description-box)
          ("mdat" movie-data-box))))
 
-(defgeneric read-box-data (box stream pos))
-(defgeneric read-box-children (box stream pos))
+(defgeneric read-box-start (box stream pos))
+(defgeneric read-box-end (box stream pos))
 
-(defmethod read-box-data ((box box) stream pos)
+(defmethod read-box-start ((box box) stream pos)
+  pos)
+
+(defmethod read-box-start ((box full-box) stream pos)
+  (let ((pos (call-next-method)))
+    (setf (box-version box) (read-byte stream))
+    (setf (box-flags box)
+          (make-array 3
+                      :initial-contents (list (read-byte stream)
+                                              (read-byte stream)
+                                              (read-byte stream))))
+    (+ pos 4)))
+
+
+(defmethod read-box-start ((box sample-description-box) stream pos)
+  (let ((pos (call-next-method)))
+    (declare (ignore pos))
+    (setf (box-entry-count box) (read-32-bit-int stream))
+    (setf (children box)
+          (loop for i below (box-entry-count box)
+             collect (read-next-box stream box)))
+    (box-size box)))
+
+(defmethod read-box-end ((box box) stream pos)
+  (skip-n-bytes stream (- (box-size box) pos))
+  (box-size box))
+
+(defmethod read-box-end ((box data-box) stream pos)
   (setf (box-data box)
         (read-n-bytes stream (- (box-size box) pos)))
   (box-size box))
 
-(defmethod read-box-data ((box movie-data-box) stream pos)
+(defmethod read-box-end ((box container-box) stream pos)
+  (multiple-value-bind (children cpos)
+      (read-boxes stream box (- (box-size box) pos))
+    (setf (children box) children)
+    (call-next-method box stream (+ pos cpos))))
+
+(defmethod read-box-end ((box movie-data-box) stream pos)
   (setf (box-data-position box) (file-position stream))
   (if *read-movie-data*
       (call-next-method)
       (progn
         (skip-n-bytes stream (- (box-size box) pos))
         (box-size box))))
-
-(defmethod read-box-data ((box full-box) stream pos)
-  (setf (box-version box) (read-byte stream))
-  (setf (box-flags box) (make-array 3
-                                    :initial-contents (list (read-byte stream)
-                                                            (read-byte stream)
-                                                            (read-byte stream))))
-  (call-next-method box stream (+ pos 4)))
-
-
-(defmethod read-box-data ((box sample-description-box) stream pos)
-  (setf (box-version box) (read-byte stream))
-  (setf (box-flags box) (make-array 3 :initial-contents (list (read-byte stream)
-                                                              (read-byte stream)
-                                                              (read-byte stream))))
-  (setf (box-entry-count box) (read-32-bit-int stream))
-  (setf (children box)
-        (loop for i below (box-entry-count box)
-           collect (read-next-box stream box)))
-  (box-size box))
-
-(defmethod read-box-children ((box box) stream pos)
-  pos)
-
-(defmethod read-box-children ((box container-box) stream pos)
-  (multiple-value-bind (children cpos)
-      (read-boxes stream box (- (box-size box) pos))
-    (setf (children box) children)
-    (+ pos cpos)))
 
 (defun read-box-header (stream)
   "reads the header of a box and returns a list of values: box-size,
@@ -249,8 +253,8 @@ in the header (so far)."
                                       (box-size (or box-large-size box-size))
                                       (box (apply #'make-box box-size box-type :class class :parent parent
                                                   (when box-user-type (list :box-user-type box-user-type)))))
-                                 (let ((pos (read-box-data box stream bpos)))
-                                   (let ((pos (read-box-children box stream pos)))
+                                 (let ((pos (read-box-start box stream bpos)))
+                                   (let ((pos (read-box-end box stream pos)))
                                      (skip-n-bytes stream (- box-size pos))))
                                  box))))
                while box 
