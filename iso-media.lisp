@@ -82,7 +82,9 @@
 (defclass box ()
   ((box-parent :accessor box-parent :initarg :box-parent)
    (box-size :accessor box-size :initarg :box-size)
-   (box-type :accessor box-type :initarg :box-type)))
+   (box-large-size :accessor box-large-size :initarg :box-large-size)
+   (box-type :accessor box-type :initarg :box-type)
+   (box-user-type :accessor box-user-type :initarg :box-user-type)))
 
 (defmethod print-object ((object box) stream)
   (print-unreadable-object (object stream :type t)
@@ -90,11 +92,12 @@
                  (type box-type)) object
       (format stream "~s :size ~d" (media-type-string type) size))))
 
-(defun make-box (size type &key (class 'box) parent)
+(defun make-box (size type &key (class 'box) parent user-type)
   (make-instance class
                  :box-parent parent
                  :box-size size
-                 :box-type type))
+                 :box-type type
+                 :box-user-type user-type))
 
 (defmethod find-ancestor ((box box) (type vector))
   (let ((anc (box-parent box)))
@@ -141,7 +144,8 @@
       (values buf bytes-read))))
 
 (defun skip-n-bytes (stream n)
-  (file-position stream (+ (file-position stream) n)))
+  (when (plusp n)
+    (file-position stream (+ (file-position stream) n))))
 
 (defun read-32-bit-int (stream)
   (multiple-value-bind (buf bytes-read) 
@@ -153,11 +157,6 @@
 ;; reading ISO media files
 ;; spec can be found here: http://standards.iso.org/ittf/PubliclyAvailableStandards/c041828_ISO_IEC_14496-12_2005(E).zip
 ;;
-(defun read-box-info (stream)
-  ;; FIXME need to handle 64-bit sizes here!!!
-  (let* ((box-size (read-32-bit-int stream))
-         (box-type (read-n-bytes stream 4)))
-    (list box-size box-type)))
 
 ;; NOTE!!! remember that the size of the data we want to read is 8
 ;; less than the size of the box! We could fix that here, but
@@ -176,16 +175,18 @@
 
 ;;; machinery for reading boxes
 (defparameter *box-type-hash* (make-hash-table :test 'equalp))
-(map nil (lambda (x)
-           (destructuring-bind (type class) x
-             (setf (gethash (media-type-vector type) *box-type-hash*) class)))
-     '(("moov" container-box)
-       ("trak" container-box)
-       ("mdia" container-box)
-       ("minf" container-box)
-       ("stbl" container-box)
-       ("stsd" sample-description-box)
-       ("mdat" movie-data-box)))
+(progn 
+  (clrhash *box-type-hash*)
+  (map nil (lambda (x)
+             (destructuring-bind (type class) x
+               (setf (gethash (media-type-vector type) *box-type-hash*) class)))
+       '(("moov" container-box)
+         ("trak" container-box)
+         ("mdia" container-box)
+         ("minf" container-box)
+         ("stbl" container-box)
+         #+nil ("stsd" sample-description-box)
+         ("mdat" movie-data-box))))
 
 (defgeneric %read-box (box type size stream))
 
@@ -231,13 +232,79 @@
         (%read-box box box-type box-size stream)
         box))))
 
+
+;;; new attempt at reading ISO boxes more cleanly...
+
+
+(defgeneric read-box-data-2 (box stream pos))
+
+(defmethod read-box-data-2 ((box box) stream pos)
+  (progn
+    (format *error-output* "~&type: ~S" (media-type-string (box-type box)))
+    (setf (box-data box)
+          (read-n-bytes stream (- (box-size box) pos)))
+    (box-size box)))
+
+(defmethod read-box-data-2 ((box movie-data-box) stream pos)
+  (format *error-output* "~&type: ~S" (media-type-string (box-type box)))
+  (setf (box-data-position box) (file-position stream))
+  (if *read-movie-data*
+      (call-next-method)
+      (skip-n-bytes stream (- (box-size box) pos))))
+
+
+(defmethod read-box-data-2 ((box container-box) stream pos)
+  (multiple-value-bind (children cpos)
+      (read-boxes stream box (- (box-size box) pos))
+    (setf (children box) children)
+    (+ pos cpos)))
+
+(defun read-box-info-2 (stream)
+  "reads the header of a box and returns a list of values: box-size,
+box-type, box-large-size, box-user-type and the number of bytes read
+in the header (so far)."
+  (declare (optimize (debug 3)))
+  (let* ((box-size (read-32-bit-int stream))
+         (box-type (read-n-bytes stream 4))
+         (pos 8))
+    (when box-size
+       (destructuring-bind (box-size box-large-size pos)
+          (cond ((= box-size 1)
+                 (list box-size
+                       (+ (* (read-32-bit-int stream) #xffffffff)
+                          (read-32-bit-int stream))
+                       (+ pos 8)))
+                (t (list box-size nil pos)))
+        (if (equalp box-type (media-type-vector "uuid"))
+            (list box-size box-type box-large-size (read-n-bytes stream 16) (+ pos 16))
+            (list box-size box-type box-large-size nil pos))))))
+
+(defun read-boxes (stream parent &optional limit)
+  (let ((pos 0))
+    (values (loop
+               while (or (not limit) (< pos limit))
+               for box = (let ((box-info (read-box-info-2 stream)))
+                           (when box-info
+                             (destructuring-bind (box-size box-type box-large-size box-user-type bpos)
+                                 box-info
+                               (let* ((class (or (gethash box-type *box-type-hash*) 'data-box))
+                                      (box-size (or box-large-size box-size))
+                                      (box (apply #'make-box box-size box-type :class class :parent parent
+                                                  (when box-user-type (list :box-user-type box-user-type)))))
+                                 (let ((pos (read-box-data-2 box stream bpos)))
+                                   (format *error-output* "~&skipping ~D bytes: " (- box-size pos))
+                                   (skip-n-bytes stream (- box-size pos)))
+                                 box))))
+               while box 
+               do (incf pos (box-size box))
+               collect box)
+            pos)))
+
 ;;; reading streams and files
 (defun read-iso-media-stream (stream)
   (let ((container (make-instance 'iso-container)))
     (setf (children container)
-          (loop for box = (read-next-box stream container)
-             while box 
-             collect box))
+          (read-boxes stream container))
     container))
 
 (defun read-iso-media-file (file)
