@@ -66,7 +66,7 @@
 
 (map 'string #'code-char
      (box-data
-      (reduce #'find-child (list *cc* "moov" "udta" "meta" "ilst" "©ART" "data"))))
+      (reduce #'find-child (list *cc* "moov" "udta" "meta" "ilst" (iso-media::prepend-copyright-symbol "ART") "data"))))
 
 
 (let ((file #p"/Volumes/iTunes_music/Archive/The Clash/Live_ From Here to Eternity/01 Complete Control.m4a"))

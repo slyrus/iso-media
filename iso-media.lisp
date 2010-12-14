@@ -29,7 +29,8 @@
            #:read-iso-media-stream
            #:read-iso-media-file
            
-           #:audio-sample-type))
+           #:audio-sample-type
+           #:artist))
 
 (cl:in-package #:iso-media)
 
@@ -327,3 +328,10 @@ in the header (so far)."
               (list
                iso-container
                "moov" "trak" "mdia" "minf" "stbl" "stsd")))))))
+
+(defun artist (iso-container)
+  (map 'string #'code-char
+       (box-data
+        (reduce #'find-child
+                (list iso-container "moov" "udta" "meta" "ilst"
+                      (iso-media::prepend-copyright-symbol "ART") "data")))))
