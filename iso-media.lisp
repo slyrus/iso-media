@@ -30,7 +30,31 @@
            #:read-iso-media-file
            
            #:audio-sample-type
-           #:artist))
+
+           #:track-name
+           #:artist
+           #:album-artist
+           #:album-name
+           #:grouping
+           #:year-of-publication
+           #:track-number
+           #:disk-number
+           #:tempo
+           #:composer-name
+           #:comments
+           #:genre
+           #:genre-code
+           #:compilation-part
+           #:show-name
+           #:sort-track-name
+           #:sort-artist
+           #:sort-album-artist
+           #:sort-album-name
+           #:sort-composer-name
+           #:sort-show-name
+           #:lyrics
+           #:cover
+           #:information))
 
 (cl:in-package #:iso-media)
 
@@ -348,7 +372,7 @@ in the header (so far)."
   (defitunes-getter disk-number "disk")
   (defitunes-getter tempo "tmpo")
   (defitunes-getter composer-name (concatenate 'string *copyright-symbol-string* "wrt"))
-  (defitunes-getter commentso (concatenate 'string *copyright-symbol-string* "cmt"))
+  (defitunes-getter comments (concatenate 'string *copyright-symbol-string* "cmt"))
   (defitunes-getter genre (concatenate 'string *copyright-symbol-string* "gen"))
   (defitunes-getter genre-code "gnre")
   (defitunes-getter compilation-part "cpil")
