@@ -328,9 +328,38 @@ in the header (so far)."
                iso-container
                "moov" "trak" "mdia" "minf" "stbl" "stsd")))))))
 
-(defun artist (iso-container)
-  (map 'string #'code-char
-       (box-data
-        (reduce #'find-child
-                (list iso-container "moov" "udta" "meta" "ilst"
-                      (iso-media::prepend-copyright-symbol "ART") "data")))))
+(defun itunes-container-box-info (iso-container type)
+  (box-data
+   (reduce #'find-child
+           (list iso-container "moov" "udta" "meta" "ilst" type "data"))))
+
+(macrolet 
+    ((defitunes-getter (accessor-name accessor-type)
+       `(defun ,accessor-name (iso-container)
+          (map 'string #'code-char
+               (itunes-container-box-info iso-container ,accessor-type)))))
+  (defitunes-getter track-name (concatenate 'string *copyright-symbol-string* "nam"))
+  (defitunes-getter artist (concatenate 'string *copyright-symbol-string* "ART"))
+  (defitunes-getter album-artist "aART")
+  (defitunes-getter album-name (concatenate 'string *copyright-symbol-string* "alb"))
+  (defitunes-getter grouping (concatenate 'string *copyright-symbol-string* "grp"))
+  (defitunes-getter year-of-publication (concatenate 'string *copyright-symbol-string* "day"))
+  (defitunes-getter track-number "trkn")
+  (defitunes-getter disk-number "disk")
+  (defitunes-getter tempo "tmpo")
+  (defitunes-getter composer-name (concatenate 'string *copyright-symbol-string* "wrt"))
+  (defitunes-getter commentso (concatenate 'string *copyright-symbol-string* "cmt"))
+  (defitunes-getter genre (concatenate 'string *copyright-symbol-string* "gen"))
+  (defitunes-getter genre-code "gnre")
+  (defitunes-getter compilation-part "cpil")
+  (defitunes-getter show-name "tvsh")
+  (defitunes-getter sort-track-name "sonm")
+  (defitunes-getter sort-artist "soar")
+  (defitunes-getter sort-album-artist "soaa")
+  (defitunes-getter sort-album-name "soal")
+  (defitunes-getter sort-composer-name "soco")
+  (defitunes-getter sort-show-name "sosn")
+  (defitunes-getter lyrics (concatenate 'string *copyright-symbol-string* "lyr"))
+  (defitunes-getter cover "covr")
+  (defitunes-getter information (concatenate 'string *copyright-symbol-string* "too")))
+
