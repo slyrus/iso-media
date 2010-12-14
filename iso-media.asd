@@ -5,6 +5,7 @@
   :version "0.0.1"
   :licence "BSD"
   :description "A library for reading ISO Media (such as MP4) Files"
+  :depends-on (com.gigamonkeys.binary-data)
   :components
   ((:cl-source-file "iso-media")
    (:module 

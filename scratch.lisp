@@ -58,18 +58,38 @@
   (iso-media::audio-sample-type (read-iso-media-file file)))
 
 
+#+nil 
 (defparameter *cc*
   (read-iso-media-file
    #p"/Volumes/iTunes_music/Archive/The Clash/Live_ From Here to Eternity/01 Complete Control.m4a"))
+
+(defparameter *cc*  (read-iso-media-file *test-file*))
 
 (find-child (find-child *cc* "moov") "mvhd")
 
 (map 'string #'code-char
      (box-data
-      (reduce #'find-child (list *cc* "moov" "udta" "meta" "ilst" (iso-media::prepend-copyright-symbol "ART") "data"))))
+      (reduce #'find-child (list *cc* "moov" "udta" "meta" "ilst" (concatenate 'string iso-media::*copyright-symbol-string* "ART") "data"))))
 
 
 (let ((file #p"/Volumes/iTunes_music/Archive/The Clash/Live_ From Here to Eternity/01 Complete Control.m4a"))
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (iso-media::read-iso-media-stream stream)))
 
+(let ((file *test-file*))
+  (with-open-file (stream file :element-type '(unsigned-byte 8))
+    (children
+     (iso-media::read-iso-media-stream2 stream))))
+
+
+(map 'string #'code-char
+     (box-data
+      (reduce #'find-child (list *q* "moov" "udta" "meta" "ilst" (concatenate 'string iso-media::*copyright-symbol-string* "ART") "data"))))
+
+
+(reduce #'find-child (list *q* "moov" "udta" "meta"))
+
+
+(map 'list (lambda (x)
+             (map 'string #'code-char (box-type x)))
+     (children (find-child *q* "moov")))
