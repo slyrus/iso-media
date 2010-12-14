@@ -164,8 +164,7 @@
 
 (defparameter *read-movie-data* nil)
 
-(defun prepend-copyright-symbol (string)
-  (concatenate 'string (string (code-char 169)) string))
+(defparameter *copyright-symbol-string* #.(string (code-char 169)))
 
 ;;; machinery for reading boxes
 (defparameter *box-type-hash* (make-hash-table :test 'equalp))
@@ -189,18 +188,18 @@
          ("mdhd" full-box)
          
          ("ilst" container-box)
-         (,(prepend-copyright-symbol "nam") container-box)
-         (,(prepend-copyright-symbol "ART") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "nam") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "ART") container-box)
          ("aART" container-box)
-         (,(prepend-copyright-symbol "alb") container-box)
-         (,(prepend-copyright-symbol "grp") container-box)
-         (,(prepend-copyright-symbol "day") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "alb") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "grp") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "day") container-box)
          ("trkn" container-box)
          ("disk" container-box)
          ("tmpo" container-box)
-         (,(prepend-copyright-symbol "wrt") container-box)
-         (,(prepend-copyright-symbol "cmt") container-box)
-         (,(prepend-copyright-symbol "gen") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "wrt") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "cmt") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "gen") container-box)
          ("gnre" container-box)
          ("cpil" container-box)
          ("tvsh" container-box)
@@ -210,9 +209,9 @@
          ("soal" container-box)
          ("soco" container-box)
          ("sosn" container-box)
-         (,(prepend-copyright-symbol "lyr") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "lyr") container-box)
          ("covr" container-box)
-         (,(prepend-copyright-symbol "too") container-box)
+         (,(concatenate 'string *copyright-symbol-string* "too") container-box)
 
          ("data" apple-data-box))))
 
