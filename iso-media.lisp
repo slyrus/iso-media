@@ -175,7 +175,7 @@
                              (if large-size 4 0)
                              (if user-type 16 0))))))
 
-(defun read-boxes2 (stream limit)
+(defun read-boxes (stream limit)
   (loop with bytes-read = 0
      while (or (not limit) (< bytes-read limit))
      for child = (handler-case 
@@ -187,7 +187,7 @@
 
 (define-binary-type box-list (limit)
   (:reader (in)
-           (read-boxes2 in limit))
+           (read-boxes in limit))
   (:writer (out value)
            (declare (ignore out value))
            (error "not written yet!")))
@@ -253,15 +253,15 @@
   (or (gethash box-type *bbox-type-hash*)
       'data-bbox))
 
-(defun read-iso-media-stream2 (stream)
+(defun read-iso-media-stream (stream)
   (let ((container (make-instance 'iso-container)))
     (setf (children container)
-          (read-boxes2 stream nil))
+          (read-boxes stream nil))
     container))
 
-(defun read-iso-media-file2 (file)
+(defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
-    (read-iso-media-stream2 stream)))
+    (read-iso-media-stream stream)))
 
 (defparameter *copyright-symbol-string* #.(string (code-char 169)))
 
