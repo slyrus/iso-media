@@ -17,13 +17,13 @@ Dependencies
 
 ## binary-data
 
-* github page: https://github.com/slyrus/monkeylib-binary-data/tree/alexandria
-* git source repository: git://github.com/slyrus/monkeylib-binary-data.git
+* github page: [https://github.com/slyrus/monkeylib-binary-data/tree/alexandria](https://github.com/slyrus/monkeylib-binary-data/tree/alexandria)
+* git source repository: [git://github.com/slyrus/monkeylib-binary-data.git](git://github.com/slyrus/monkeylib-binary-data.git)
 
 ## alexandria
 
-* common-lisp.net page: http://common-lisp.net/project/alexandria/
-* git source repository: http://common-lisp.net/gitweb?p=projects/alexandria/alexandria.git;a=summary
+* common-lisp.net page: [http://common-lisp.net/project/alexandria/](http://common-lisp.net/project/alexandria/)
+* git source repository: [http://common-lisp.net/gitweb?p=projects/alexandria/alexandria.git;a=summary](http://common-lisp.net/gitweb?p=projects/alexandria/alexandria.git;a=summary)
 
 alexandria is available through quicklisp and it is the hope of the
 author that both binary-data and iso-media are available through
@@ -37,6 +37,10 @@ alexandria library instead of Peter Seibel's monkeylib-macro-utilities
 library. Hopefully the core binary-data library will incorporate this
 change in the near future.
 
+Using iso-media
+===============
+
+TBW
 
 Cyrus Harmon
 ch-lisp@bobobeach.com
