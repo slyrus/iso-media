@@ -249,10 +249,6 @@
                              (if user-type 16 0)
                              4 4)))))
 
-(defun find-box-class (box-type)
-  (or (gethash box-type *bbox-type-hash*)
-      'data-bbox))
-
 (defun read-iso-media-stream (stream)
   (let ((container (make-instance 'iso-container)))
     (setf (children container)
@@ -312,6 +308,9 @@
          (,(concatenate 'string *copyright-symbol-string* "too") container-bbox)
          
          ("data" apple-data-bbox))))
+(defun find-box-class (box-type)
+  (or (gethash box-type *bbox-type-hash*)
+      'data-bbox))
 
 ;;;
 ;;; functions to access data in iso-containers
