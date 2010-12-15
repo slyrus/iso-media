@@ -31,7 +31,7 @@
 
 (define-binary-type optional (type if)
   (:reader (in)
-    (when if (read-value type in)))
+           (when if (read-value type in)))
   (:writer (out value)
-    (when if (write-value type out value))))
+           (when if (write-value type out value))))
 

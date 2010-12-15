@@ -117,8 +117,7 @@
 
 (define-binary-class meta-bbox (full-container-bbox) ())
 
-
-
+(define-binary-type terminated-string () (iso-8859-1-terminated-string :terminator +null+))
 
 (define-binary-class handler-bbox (full-bbox-header)
   ((pre-defined u4)
@@ -126,10 +125,16 @@
    (reserved-1 u4)
    (reserved-2 u4)
    (reserved-3 u4)
-   (data (skippable-raw-bytes :size (data-size (current-binary-object)) 
+   (name (optional :type 'terminated-string
+                   :if (plusp (data-size (current-binary-object)))))
+   (data (skippable-raw-bytes :size (data-size (current-binary-object))
                               :predicate #'(lambda () (constantly nil))))))
 
-(defmethod header-size + ((obj handler-bbox)) 20)
+(defmethod header-size + ((obj handler-bbox))
+           (+ 20
+              (or (when (and (slot-boundp obj 'name) (name obj))
+                    (1+ (length (name obj))))
+                  0)))
 
 (define-binary-class container-bbox (bbox)
   ((children (box-list :limit (data-size (current-binary-object))))))
@@ -151,28 +156,6 @@
    (data (raw-bytes :size (data-size (current-binary-object))))))
 
 (defmethod header-size + ((obj apple-data-bbox)) 4)
-
-(defun read-iso-media-stream (stream)
-  (let ((container (make-instance 'iso-container)))
-    (setf (children container)
-          (read-boxes stream nil))
-    container))
-
-(defun read-iso-media-file (file)
-  (with-open-file (stream file :element-type '(unsigned-byte 8))
-    (read-iso-media-stream stream)))
-
-(defun read-it (file)
-  (with-open-file (in file :element-type '(unsigned-byte 8))
-    (read-value 'iso-container in)))
-
-(defun write-it (file obj)
-  (with-open-file (out file 
-                       :direction :output
-                       :if-exists :supersede
-                       :element-type '(unsigned-byte 8))
-    (write-value 'iso-container out obj)))
-
 
 (defparameter *copyright-symbol-string* #.(string (code-char 169)))
 
@@ -273,4 +256,22 @@
   (defitunes-getter lyrics (concatenate 'string *copyright-symbol-string* "lyr"))
   (defitunes-getter cover "covr")
   (defitunes-getter information (concatenate 'string *copyright-symbol-string* "too")))
+
+
+(defun read-iso-media-stream (stream)
+  (read-value 'iso-container stream))
+
+(defun read-iso-media-file (file)
+  (with-open-file (stream file :element-type '(unsigned-byte 8))
+    (read-iso-media-stream stream)))
+
+(defun write-iso-media-stream (stream obj)
+  (write-value 'iso-container stream obj))
+
+(defun write-iso-media-file (file obj)
+  (with-open-file (out file 
+                       :direction :output
+                       :if-exists :supersede
+                       :element-type '(unsigned-byte 8))
+    (write-iso-media-stream out obj)))
 
