@@ -93,23 +93,6 @@
     (file-position stream (+ (file-position stream) n))))
 
 ;;; 
-(defclass iso-container ()
-  ((children :accessor children :initarg :children)))
-
-(defmethod print-object ((object iso-container) stream)
-  (print-unreadable-object (object stream :type t)
-    (with-slots (children) object
-      (format stream ":children ~a" children))))
-
-(defmethod find-child ((node iso-container) type)
-  (find (media-type-vector type)
-        (children node)
-        :key #'box-type
-        :test #'equalp))
-
-(defmethod find-ancestor ((node iso-container) type)
-  (declare (ignore type))
-  nil)
 
 ;;; basic box class
 (define-binary-type raw-bytes (size)
@@ -150,30 +133,36 @@
                         :if (equalp box-type (media-type-vector "uuid")))))
   (:dispatch (find-box-class box-type)))
 
+(defgeneric header-size (object)
+  (:method-combination +))
+
+(defmethod header-size + ((obj bbox))
+  (with-slots (large-size user-type) obj
+    (+ 8
+       (if large-size 4 0)
+       (if user-type 16 0))))
+
+(defmethod data-size ((obj bbox))
+  (- (size obj) (header-size obj)))
+
 (defmethod print-object ((object bbox) stream)
   (print-unreadable-object (object stream :type t)
     (with-slots ((size size)
                  (box-type box-type)) object
       (format stream "~s :size ~d" (media-type-string box-type) size))))
 
-
 (define-binary-class full-bbox-header (bbox)
   ((version u1)
    (flags u3)))
 
+(defmethod header-size + ((obj full-bbox-header)) 4)
+
 (define-binary-class full-bbox (full-bbox-header)
-  ((data (skippable-raw-bytes :size (- size
-                                       8
-                                       (if large-size 4 0)
-                                       (if user-type 16 0)
-                                       4)
-                              :predicate #'(lambda () (constantly nil))))))
+  ((data (skippable-raw-bytes :size (data-size (current-binary-object))
+                              :predicate #'(lambda () (constantly nil)))q)))
 
 (define-binary-class data-bbox (bbox)
-  ((data (raw-bytes :size (- size
-                             8
-                             (if large-size 4 0)
-                             (if user-type 16 0))))))
+  ((data (raw-bytes :size (data-size (current-binary-object))))))
 
 (defun read-boxes (stream limit)
   (loop with bytes-read = 0
@@ -185,12 +174,33 @@
      (incf bytes-read (size child))
        while child collect child))
 
+(defun write-boxes (stream box-list)
+  (loop for x in box-list
+     do (write-value 'bbox stream x)))
+
 (define-binary-type box-list (limit)
   (:reader (in)
            (read-boxes in limit))
   (:writer (out value)
-           (declare (ignore out value))
-           (error "not written yet!")))
+           (write-boxes out value)))
+
+(define-binary-class iso-container ()
+  ((children box-list)))
+
+(defmethod print-object ((object iso-container) stream)
+  (print-unreadable-object (object stream :type t)
+    (with-slots (children) object
+      (format stream ":children ~a" children))))
+
+(defmethod find-child ((node iso-container) type)
+  (find (media-type-vector type)
+        (children node)
+        :key #'box-type
+        :test #'equalp))
+
+(defmethod find-ancestor ((node iso-container) type)
+  (declare (ignore type))
+  nil)
 
 (defmethod find-child ((node bbox) type)
   (find (media-type-vector type)
@@ -199,12 +209,12 @@
         :test #'equalp))
 
 (define-binary-class full-container-bbox (full-bbox-header)
-  ((children (box-list :limit (- size 8
-                                 (if large-size 4 0)
-                                 (if user-type 16 0)
-                                 4)))))
+  ((children (box-list :limit (data-size (current-binary-object))))))
 
 (define-binary-class meta-bbox (full-container-bbox) ())
+
+
+
 
 (define-binary-class handler-bbox (full-bbox-header)
   ((pre-defined u4)
@@ -212,42 +222,31 @@
    (reserved-1 u4)
    (reserved-2 u4)
    (reserved-3 u4)
-   (data (skippable-raw-bytes :size (- size
-                                       8
-                                       (if large-size 4 0)
-                                       (if user-type 16 0)
-                                       4 20) 
+   (data (skippable-raw-bytes :size (data-size (current-binary-object)) 
                               :predicate #'(lambda () (constantly nil))))))
 
-(define-binary-class container-bbox (bbox)
-  ((children (box-list :limit (- size 8
-                                 (if large-size 4 0)
-                                 (if user-type 16 0))))))
+(defmethod header-size + ((obj handler-bbox)) 20)
 
+(define-binary-class container-bbox (bbox)
+  ((children (box-list :limit (data-size (current-binary-object))))))
 
 (define-binary-class sample-description-bbox (full-bbox-header)
   ((entry-count u4)
-   (children (box-list :limit (- size 8
-                                 (if large-size 4 0)
-                                 (if user-type 16 0)
-                                 4 4)))))
+   (children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod header-size + ((obj sample-description-bbox)) 4)
 
 (defparameter *read-movie-data* nil)
 
 (define-binary-class movie-data-bbox (bbox)
-  ((data (skippable-raw-bytes :size (- size
-                                       8
-                                       (if large-size 4 0)
-                                       (if user-type 16 0))
+  ((data (skippable-raw-bytes :size (data-size (current-binary-object))
                               :predicate #'(lambda () *read-movie-data*)))))
 
 (define-binary-class apple-data-bbox (full-bbox-header)
   ((pad u4)
-   (data (raw-bytes :size (- size
-                             8
-                             (if large-size 4 0)
-                             (if user-type 16 0)
-                             4 4)))))
+   (data (raw-bytes :size (data-size (current-binary-object))))))
+
+(defmethod header-size + ((obj apple-data-bbox)) 4)
 
 (defun read-iso-media-stream (stream)
   (let ((container (make-instance 'iso-container)))
@@ -258,6 +257,18 @@
 (defun read-iso-media-file (file)
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (read-iso-media-stream stream)))
+
+(defun read-it (file)
+  (with-open-file (in file :element-type '(unsigned-byte 8))
+    (read-value 'iso-container in)))
+
+(defun write-it (file obj)
+  (with-open-file (out file 
+                       :direction :output
+                       :if-exists :supersede
+                       :element-type '(unsigned-byte 8))
+    (write-value 'iso-container out obj)))
+
 
 (defparameter *copyright-symbol-string* #.(string (code-char 169)))
 
