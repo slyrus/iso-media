@@ -8,28 +8,17 @@
 
            #:box
            #:box-type
-           #:box-size
-           
-           #:box-parent
-           #:box-data
+           #:size
+           #:data
            #:make-box
            
-           #:read-n-bytes
-           #:read-32-bit-int
-
-           #:media-type-string
-           #:media-type-vector
-           #:media-type-vector-to-int
-           #:media-type-string-to-int
-
-           #:find-box-type
-           #:find-ancestor
            #:find-child
+           #:filter-children
 
-           #:read-box
-           
            #:read-iso-media-stream
            #:read-iso-media-file
+           #:write-iso-media-stream
+           #:write-iso-media-file
            
            #:audio-sample-type
 

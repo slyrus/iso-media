@@ -6,35 +6,17 @@
 
 (cl:in-package #:iso-media)
  
-(defun media-type-string (type-int)
-  (map 'string #'code-char type-int))
-
-(defun media-type-vector (type-string)
-  (map 'vector #'char-code type-string))
-
-(defun media-type-vector-to-int (type-vector)
-  (reduce (lambda (x y) (+ (ash x 8) y)) type-vector))
-
-(defun media-type-string-to-int (type-string)
-  (media-type-vector-to-int (map 'vector #'char-code type-string)))
-
-(defun find-box-type (type box-list)
-  (find (media-type-vector type)
-        box-list
-        :key #'box-type
-        :test #'equalp))
-
 (defgeneric find-child (node type))
-(defgeneric find-ancestor (node type))
+(defgeneric filter-children (node type))
 
 (defun large-size-p (size) (= size 1))
 
 (define-tagged-binary-class bbox ()
   ((size u4)
-   (box-type (raw-bytes :size 4))
+   (box-type (iso-8859-1-string :length 4))
    (large-size (optional :type 'u8 :if (large-size-p size)))
    (user-type (optional :type '(raw-bytes :size 16)
-                        :if (equalp box-type (media-type-vector "uuid")))))
+                        :if (equal box-type "uuid"))))
   (:dispatch (find-box-class box-type)))
 
 (defgeneric header-size (object)
@@ -53,7 +35,7 @@
   (print-unreadable-object (object stream :type t)
     (with-slots ((size size)
                  (box-type box-type)) object
-      (format stream "~s :size ~d" (media-type-string box-type) size))))
+      (format stream "~s :size ~d" box-type size))))
 
 (define-binary-class full-bbox-header (bbox)
   ((version u1)
@@ -97,20 +79,18 @@
       (format stream ":children ~a" children))))
 
 (defmethod find-child ((node iso-container) type)
-  (find (media-type-vector type)
+  (find type
         (children node)
         :key #'box-type
-        :test #'equalp))
-
-(defmethod find-ancestor ((node iso-container) type)
-  (declare (ignore type))
-  nil)
+        :test #'equal))
 
 (defmethod find-child ((node bbox) type)
-  (find (media-type-vector type)
-        (children node)
-        :key #'box-type
-        :test #'equalp))
+  (find type (children node) :key #'box-type :test #'equal))
+
+(defmethod filter-children ((node bbox) type)
+  (remove-if-not (lambda (x) (equal x type))
+                 (children node)
+                 :key #'box-type))
 
 (define-binary-class full-container-bbox (full-bbox-header)
   ((children (box-list :limit (data-size (current-binary-object))))))
@@ -159,12 +139,12 @@
 
 (defparameter *copyright-symbol-string* #.(string (code-char 169)))
 
-(defparameter *bbox-type-hash* (make-hash-table :test 'equalp))
+(defparameter *bbox-type-hash* (make-hash-table :test 'equal))
 (progn 
   (clrhash *bbox-type-hash*)
   (map nil (lambda (x)
              (destructuring-bind (type class) x
-               (setf (gethash (media-type-vector type) *bbox-type-hash*) class)))
+               (setf (gethash type *bbox-type-hash*) class)))
        `(("moov" container-bbox)
          ("trak" container-bbox)
          ("mdia" container-bbox)
@@ -206,6 +186,7 @@
          (,(concatenate 'string *copyright-symbol-string* "too") container-bbox)
          
          ("data" apple-data-bbox))))
+
 (defun find-box-class (box-type)
   (or (gethash box-type *bbox-type-hash*)
       'data-bbox))
@@ -213,14 +194,13 @@
 ;;;
 ;;; functions to access data in iso-containers
 (defun audio-sample-type (iso-container)
-  (media-type-string
-   (box-type
-    (first
-     (children
-      (reduce #'find-child
-              (list
-               iso-container
-               "moov" "trak" "mdia" "minf" "stbl" "stsd")))))))
+  (box-type
+   (first
+    (children
+     (reduce #'find-child
+             (list
+              iso-container
+              "moov" "trak" "mdia" "minf" "stbl" "stsd"))))))
 
 (defun itunes-container-box-info (iso-container type)
   (data
@@ -257,7 +237,8 @@
   (defitunes-getter cover "covr")
   (defitunes-getter information (concatenate 'string *copyright-symbol-string* "too")))
 
-
+;;;
+;;; main read and write routines
 (defun read-iso-media-stream (stream)
   (read-value 'iso-container stream))
 
