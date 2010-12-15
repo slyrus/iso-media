@@ -4,65 +4,6 @@
 ;; spec can be found here: http://standards.iso.org/ittf/PubliclyAvailableStandards/c041828_ISO_IEC_14496-12_2005(E).zip
 ;;
 
-(cl:defpackage #:iso-media
-  (:use #:cl
-        #:com.gigamonkeys.binary-data
-        #:com.gigamonkeys.binary-data.common-datatypes)
-  (:export #:iso-container
-           #:children
-
-           #:box
-           #:box-type
-           #:box-size
-           
-           #:box-parent
-           #:box-data
-           #:make-box
-           
-           #:read-n-bytes
-           #:read-32-bit-int
-
-           #:media-type-string
-           #:media-type-vector
-           #:media-type-vector-to-int
-           #:media-type-string-to-int
-
-           #:find-box-type
-           #:find-ancestor
-           #:find-child
-
-           #:read-box
-           
-           #:read-iso-media-stream
-           #:read-iso-media-file
-           
-           #:audio-sample-type
-
-           #:track-name
-           #:artist
-           #:album-artist
-           #:album-name
-           #:grouping
-           #:year-of-publication
-           #:track-number
-           #:disk-number
-           #:tempo
-           #:composer-name
-           #:comments
-           #:genre
-           #:genre-code
-           #:compilation-part
-           #:show-name
-           #:sort-track-name
-           #:sort-artist
-           #:sort-album-artist
-           #:sort-album-name
-           #:sort-composer-name
-           #:sort-show-name
-           #:lyrics
-           #:cover
-           #:information))
-
 (cl:in-package #:iso-media)
 
 (defun media-type-string (type-int)
@@ -87,14 +28,7 @@
 (defgeneric find-child (node type))
 (defgeneric find-ancestor (node type))
 
-;;;
-(defun skip-n-bytes (stream n)
-  (when (plusp n)
-    (file-position stream (+ (file-position stream) n))))
-
-;;; 
-
-;;; basic box class
+;;; raw-bytes
 (define-binary-type raw-bytes (size)
   (:reader (in)
     (let ((buf (make-array size :element-type '(unsigned-byte 8))))
@@ -102,6 +36,11 @@
       buf))
   (:writer (out buf)
     (write-sequence buf out)))
+
+;;; skippable raw-bytes
+(defun skip-n-bytes (stream n)
+  (when (plusp n)
+    (file-position stream (+ (file-position stream) n))))
 
 (define-binary-type skippable-raw-bytes (size predicate)
   (:reader (in)

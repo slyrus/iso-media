@@ -7,7 +7,8 @@
   :description "A library for reading ISO Media (such as MP4) Files"
   :depends-on (com.gigamonkeys.binary-data)
   :components
-  ((:cl-source-file "iso-media")
+  ((:cl-source-file "package")
+   (:cl-source-file "iso-media")
    (:module 
     :test
     :components
