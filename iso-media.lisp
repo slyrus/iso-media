@@ -127,9 +127,105 @@
 
 (defparameter *read-movie-data* nil)
 
-(define-binary-class movie-data-bbox (bbox)
+(define-binary-class movie-data-bbox (full-bbox-header)
   ((data (skippable-raw-bytes :size (data-size (current-binary-object))
                               :predicate #'(lambda () *read-movie-data*)))))
+
+(define-binary-class movie-header-bbox (full-bbox-header)
+  ((creation-time (dynamic :type-fn
+                           #'(lambda ()
+                             (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (modification-time (dynamic :type-fn
+                               #'(lambda ()
+                                   (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (timescale u4)
+   (duration (dynamic :type-fn
+                      #'(lambda ()
+                        (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (rate u4)
+   (volume u2)
+   (reserved1 u2)
+   (reserved2 u4)
+   (reserved3 u4)
+   (matrix1 u4)
+   (matrix2 u4)
+   (matrix3 u4)
+   (matrix4 u4)
+   (matrix5 u4)
+   (matrix6 u4)
+   (matrix7 u4)
+   (matrix8 u4)
+   (matrix9 u4)
+   (pre-defined1 u4)
+   (pre-defined2 u4)
+   (pre-defined3 u4)
+   (pre-defined4 u4)
+   (pre-defined5 u4)
+   (pre-defined6 u4)
+   (next-track-id u4)
+   (children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod header-size + ((obj movie-header-bbox)) 
+           (+ (if (= (version obj) 1) 28 16)
+              4 2 2 8 36 24 4))
+
+(define-binary-class track-header-bbox (full-bbox-header)
+  ((creation-time
+    (dynamic :type-fn
+             #'(lambda ()
+                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (modification-time
+    (dynamic :type-fn
+             #'(lambda ()
+                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (track-id u4)
+   (reserved1 u4)
+   (duration
+    (dynamic :type-fn
+             #'(lambda ()
+                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (reserved2 u4)
+   (reserved3 u4)
+   (layer u2)
+   (alternate-group u2)
+   (volume u2)
+   (reserved4 u2)
+   (matrix1 u4)
+   (matrix2 u4)
+   (matrix3 u4)
+   (matrix4 u4)
+   (matrix5 u4)
+   (matrix6 u4)
+   (matrix7 u4)
+   (matrix8 u4)
+   (matrix9 u4)
+   (width u4)
+   (height u4)
+   (children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod header-size + ((obj track-header-bbox)) 
+           (+ (if (= (version obj) 1) 32 20)
+              8 8 36 4 4))
+
+(define-binary-class media-header-bbox (full-bbox-header)
+  ((creation-time
+    (dynamic :type-fn
+             #'(lambda ()
+                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (modification-time
+    (dynamic :type-fn
+             #'(lambda ()
+                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (timescale u4)
+   (duration (dynamic :type-fn
+                      #'(lambda ()
+                        (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (pad-and-language u2)
+   (pre-defined u2)
+   (children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod header-size + ((obj media-header-bbox)) 
+           (+ (if (= (version obj) 1) 28 16) 4))
 
 (define-binary-class apple-data-bbox (full-bbox-header)
   ((pad u4)
@@ -155,9 +251,9 @@
          ("hdlr" handler-bbox)
          ("mdat" movie-data-bbox)
          ("stsd" sample-description-bbox)
-         ("mvhd" full-bbox)
-         ("tkhd" full-bbox)
-         ("mdhd" full-bbox)
+         ("mvhd" movie-header-bbox)
+         ("tkhd" track-header-bbox)
+         ("mdhd" media-header-bbox)
 
          ("ilst" container-bbox)
          (,(concatenate 'string *copyright-symbol-string* "nam") container-bbox)
