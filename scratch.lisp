@@ -79,7 +79,7 @@
 (let ((file *test-file*))
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (children
-     (iso-media::read-iso-media-stream2 stream))))
+     (iso-media::read-iso-media-stream stream))))
 
 
 (map 'string #'code-char
