@@ -35,8 +35,8 @@
   (:writer (out value)
            (when if (write-value type out value))))
 
-(define-binary-type dynamic (type-fn)
+(define-binary-type dynamic (choose)
   (:reader (in)
-           (read-value (funcall type-fn) in))
+           (read-value choose in))
   (:writer (out value)
-           (write-value (funcall type-fn) out value)))
+           (write-value choose out value)))

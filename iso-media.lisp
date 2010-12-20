@@ -132,16 +132,10 @@
                               :predicate #'(lambda () *read-movie-data*)))))
 
 (define-binary-class movie-header-bbox (full-bbox-header)
-  ((creation-time (dynamic :type-fn
-                           #'(lambda ()
-                             (if (= 1 (version (current-binary-object))) 'u8 'u4))))
-   (modification-time (dynamic :type-fn
-                               #'(lambda ()
-                                   (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+  ((creation-time (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
+   (modification-time (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (timescale u4)
-   (duration (dynamic :type-fn
-                      #'(lambda ()
-                        (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (duration (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (rate u4)
    (volume u2)
    (reserved1 u2)
@@ -171,19 +165,13 @@
 
 (define-binary-class track-header-bbox (full-bbox-header)
   ((creation-time
-    (dynamic :type-fn
-             #'(lambda ()
-                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+    (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (modification-time
-    (dynamic :type-fn
-             #'(lambda ()
-                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+    (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (track-id u4)
    (reserved1 u4)
    (duration
-    (dynamic :type-fn
-             #'(lambda ()
-                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+    (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (reserved2 u4)
    (reserved3 u4)
    (layer u2)
@@ -209,17 +197,11 @@
 
 (define-binary-class media-header-bbox (full-bbox-header)
   ((creation-time
-    (dynamic :type-fn
-             #'(lambda ()
-                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+    (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (modification-time
-    (dynamic :type-fn
-             #'(lambda ()
-                 (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+    (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (timescale u4)
-   (duration (dynamic :type-fn
-                      #'(lambda ()
-                        (if (= 1 (version (current-binary-object))) 'u8 'u4))))
+   (duration (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
    (pad-and-language u2)
    (pre-defined u2)
    (children (box-list :limit (data-size (current-binary-object))))))
