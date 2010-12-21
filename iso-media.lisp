@@ -39,7 +39,21 @@
    (large-size (optional :type 'u8 :if (large-size-p size)))
    (user-type (optional :type '(raw-bytes :size 16)
                         :if (equal box-type "uuid"))))
-  (:dispatch (find-box-class (intern box-type (load-time-value *package*)))))
+  (:dispatch 
+   ;; unfortunately, Apple chose to encode iTunes metadata not
+   ;; directly in specific boxes, but rather in generic |data| boxes
+   ;; which are enclosed by boxes whose type defines the layout of the
+   ;; data box. Yecch... In any event, if we're reading a data box, we
+   ;; need to do something special here:
+   (let ((parent (first *in-progress-objects*))
+         (box-type-symbol (intern box-type (load-time-value *package*))))
+     (case box-type-symbol
+       ('|data| (find-data-box-class
+                 box-type-symbol
+                 (when parent
+                   (intern (box-type parent)
+                           (load-time-value *package*)))))
+       (t (find-box-class box-type-symbol))))))
 
 (defmethod print-object ((object bbox) stream)
   (print-unreadable-object (object stream :type t)
@@ -252,11 +266,31 @@
 (defmethod header-size + ((obj media-header-bbox)) 
            (+ (if (= (version obj) 1) 28 16) 4))
 
-(define-binary-class apple-data-bbox (full-bbox-header)
-  ((pad u4)
+(define-binary-class apple-data-bbox-header (full-bbox-header)
+  ((pad u4)))
+
+(defmethod header-size + ((obj apple-data-bbox-header)) 4)
+
+(define-binary-class apple-data-bbox (apple-data-bbox-header)
+  ((data (raw-bytes :size (data-size (current-binary-object))))))
+
+(define-binary-class itunes-track-number-bbox (apple-data-bbox-header)
+  ((pad1 u2)
+   (track-num u2)
+   (track-count u2)
+   (pad2 u2)
    (data (raw-bytes :size (data-size (current-binary-object))))))
 
-(defmethod header-size + ((obj apple-data-bbox)) 4)
+(defmethod header-size + ((obj itunes-track-number-bbox)) 8)
+
+(define-binary-class itunes-disk-number-bbox (apple-data-bbox-header)
+  ((pad1 u2)
+   (disk-num u2)
+   (disk-count u2)
+   (pad2 u2)
+   (data (raw-bytes :size (data-size (current-binary-object))))))
+
+(defmethod header-size + ((obj itunes-disk-number-bbox)) 8)
 
 (defparameter *copyright-symbol-string* (string (code-char 169)))
 
@@ -309,6 +343,10 @@
   (:method ((box-type (eql '|covr|))) 'container-bbox)
   (:method ((box-type (eql (make-copyright-symbol-symbol "too")))) 'container-bbox))
 
+(defgeneric find-data-box-class (box-type parent-type)
+  (:method (box-type parent) (progn (print parent) 'data-bbox))
+  (:method (box-type (parent (eql '|trkn|))) 'itunes-track-number-bbox)
+  (:method (box-type (parent (eql '|disk|))) 'apple-data-bbox))
 
 ;;;
 ;;; functions to access data in iso-containers
@@ -345,8 +383,6 @@
   (defitunes-getter album-name (make-copyright-symbol-string "alb"))
   (defitunes-getter grouping (make-copyright-symbol-string "grp"))
   (defitunes-getter year-of-publication (make-copyright-symbol-string "day"))
-  (defitunes-getter track-number "trkn")
-  (defitunes-getter disk-number "disk")
   (defitunes-getter tempo "tmpo")
   (defitunes-getter composer-name (make-copyright-symbol-string "wrt"))
   (defitunes-getter comments (make-copyright-symbol-string "cmt"))
@@ -363,6 +399,16 @@
   (defitunes-getter lyrics (make-copyright-symbol-string "lyr"))
   (defitunes-getter cover "covr")
   (defitunes-getter information (make-copyright-symbol-string "too")))
+
+(defun track-number (iso-container)
+  (let ((box (itunes-container-box iso-container "trkn")))
+            (when box
+              (list (track-num box) (track-count box)))))
+
+(defun disk-number (iso-container)
+  (let ((box (itunes-container-box iso-container "disk")))
+            (when box
+              (list (disk-num box) (disk-count box)))))
 
 ;;;
 ;;; main read and write routines
