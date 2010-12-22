@@ -33,7 +33,21 @@
 ;; binary-data package can be found at:
 ;;  <https://github.com/gigamonkey/monkeylib-binary-data>
 ;;
-(define-tagged-binary-class bbox ()
+
+(define-binary-type box-size ()
+    (:reader (in)
+             (loop with value = 0
+                for low-bit downfrom (* 8 (1- 4)) to 0 by 8 do
+                  (setf (ldb (byte 8 low-bit) value) (read-byte in))
+                finally (return value)))
+    (:writer (out value)
+             (loop for low-bit downfrom (* 8 (1- 4)) to 0 by 8
+                do (write-byte (ldb (byte 8 low-bit) value) out))))
+
+(defclass bbox-transient-data ()
+  ((parent :accessor parent :initarg :parent :initform nil)))
+
+(define-tagged-binary-class bbox (bbox-transient-data)
   ((size u4)
    (box-type (iso-8859-1-string :length 4))
    (large-size (optional :type 'u8 :if (large-size-p size)))
@@ -74,8 +88,19 @@
 ;; returned upon calling header-size for a given object will be the
 ;; sum of the values returned from each header-size method for the
 ;; class and its superclasses.
-(defgeneric header-size (object)
-  (:method-combination +))
+(defgeneric header-size (object) (:method-combination +))
+
+(defgeneric calculate-size (object) (:method-combination +))
+
+(defmethod calculate-size + ((object bbox))
+  (header-size object))
+
+(defgeneric update-size (object))
+
+(defmethod update-size ((object bbox))
+  (setf (size object) (calculate-size object))
+  (when (parent object)
+    (update-size (parent object))))
 
 ;; All boxes have the following header, mentioned above, which contain
 ;; the type and size of the box, along with the large-size and the
@@ -107,15 +132,20 @@
 (define-binary-class data-bbox (bbox)
   ((data (raw-bytes :size (data-size (current-binary-object))))))
 
-(defun read-boxes (stream limit)
+(defmethod calculate-size + ((box data-bbox))
+  (+ (length (data box))))
+
+(defun read-boxes (stream limit &optional parent)
   (loop with bytes-read = 0
      while (or (not limit) (< bytes-read limit))
      for child = (handler-case 
                      (read-value 'bbox stream)
                    (end-of-file () nil))
      when child do
-     (incf bytes-read (size child))
-       while child collect child))
+       (progn
+         (setf (parent child) parent)
+         (incf bytes-read (size child)))
+     while child collect child))
 
 (defun write-boxes (stream box-list)
   (loop for x in box-list
@@ -123,12 +153,14 @@
 
 (define-binary-type box-list (limit)
   (:reader (in)
-           (read-boxes in limit))
+           (read-boxes in limit (current-binary-object)))
   (:writer (out value)
            (write-boxes out value)))
 
 (define-binary-class iso-container ()
   ((children box-list)))
+
+(defmethod update-size ((object iso-container)))
 
 (defmethod print-object ((object iso-container) stream)
   (print-unreadable-object (object stream :type t)
@@ -151,6 +183,9 @@
 
 (define-binary-class full-container-bbox (full-bbox-header)
   ((children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod calculate-size + ((box full-container-bbox))
+  (reduce #'+ (map 'list #'size (children box))))
 
 (define-binary-class meta-bbox (full-container-bbox) ())
 
@@ -176,11 +211,17 @@
 (define-binary-class container-bbox (bbox)
   ((children (box-list :limit (data-size (current-binary-object))))))
 
+(defmethod calculate-size + ((box container-bbox))
+  (reduce #'+ (map 'list #'size (children box))))
+
 (define-binary-class sample-description-bbox (full-bbox-header)
   ((entry-count u4)
    (children (box-list :limit (data-size (current-binary-object))))))
 
 (defmethod header-size + ((obj sample-description-bbox)) 4)
+
+(defmethod calculate-size + ((box sample-description-bbox))
+  (+ (reduce #'+ (map 'list #'size (children box)))))
 
 (defparameter *read-movie-data* nil)
 
@@ -220,6 +261,9 @@
            (+ (if (= (version obj) 1) 28 16)
               4 2 2 8 36 24 4))
 
+(defmethod calculate-size + ((box movie-header-bbox))
+  (+ (reduce #'+ (map 'list #'size (children box)))))
+
 (define-binary-class track-header-bbox (full-bbox-header)
   ((creation-time
     (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
@@ -252,6 +296,9 @@
            (+ (if (= (version obj) 1) 32 20)
               8 8 36 4 4))
 
+(defmethod calculate-size + ((box track-header-bbox))
+  (+ (reduce #'+ (map 'list #'size (children box)))))
+
 (define-binary-class media-header-bbox (full-bbox-header)
   ((creation-time
     (dynamic :choose (if (= 1 (version (current-binary-object))) 'u8 'u4)))
@@ -265,6 +312,9 @@
 
 (defmethod header-size + ((obj media-header-bbox)) 
            (+ (if (= (version obj) 1) 28 16) 4))
+
+(defmethod calculate-size + ((box media-header-bbox))
+  (+ (reduce #'+ (map 'list #'size (children box)))))
 
 (define-binary-class apple-data-bbox-header (full-bbox-header)
   ((pad u4)))
