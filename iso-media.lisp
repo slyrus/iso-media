@@ -409,8 +409,30 @@
 (defgeneric find-data-box-class (box-type parent-type)
   (:method (box-type parent) 'apple-data-bbox)
   (:method (box-type (parent (eql '|trkn|))) 'itunes-track-number-bbox)
-  (:method (box-type (parent (eql '|disk|))) 'itunes-disk-number-bbox)
-  (:method (box-type (parent (eql (make-copyright-symbol-symbol "nam")))) 'apple-string-bbox))
+  (:method (box-type (parent (eql '|disk|))) 'itunes-disk-number-bbox))
+
+(macrolet ((def-find-data-box-class-method (type class)
+             `(defmethod find-data-box-class (box-type (parent (eql ,type))) ,class)))
+  (mapcar
+   #'(lambda (type-and-class)
+       (destructuring-bind (type . class) type-and-class
+         (def-find-data-box-class-method type class)))
+   `((,(make-copyright-symbol-symbol "nam") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "ART") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "alb") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "grp") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "day") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "wrt") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "cmt") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "lyr") . apple-string-bbox)
+     (,(make-copyright-symbol-symbol "too") . apple-string-bbox)
+     (|sonm| . apple-string-bbox)
+     (|soar| . apple-string-bbox)
+     (|soaa| . apple-string-bbox)
+     (|soal| . pple-string-bbox)
+     (|soco| . apple-string-bbox)
+     (|sosn| . apple-string-bbox)
+     (|tvsh| . apple-string-bbox))))
 
 ;;;
 ;;; functions to access data in iso-containers
@@ -432,10 +454,13 @@
        `(defun ,accessor-name (iso-container)
           (let ((box (itunes-container-box iso-container ,accessor-type)))
             (when box
-              (cond ((= (flags box) 1)
-                     (map 'string #'code-char
-                          (data box)))
-                    (t (data box))))))))
+              
+              (cond 
+                ((and (= (flags box) 1)
+                      (eql (type-of box) 'apple-data-box))
+                 (map 'string #'code-char
+                      (data box)))
+                (t (data box))))))))
   (defitunes-getter track-name (make-copyright-symbol-string "nam"))
   (defitunes-getter artist (make-copyright-symbol-string "ART"))
   (defitunes-getter album-artist "aART")
