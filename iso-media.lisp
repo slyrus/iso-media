@@ -125,12 +125,16 @@
 
 (defmethod header-size + ((obj full-bbox-header)) 4)
 
-(define-binary-class full-bbox (full-bbox-header)
+(define-binary-class skippable-data-mixin ()
   ((data (skippable-raw-bytes :size (data-size (current-binary-object))
-                              :predicate #'(lambda () (constantly nil)))q)))
+                              :predicate #'(lambda () (constantly nil))))))
 
-(define-binary-class data-bbox (bbox)
+(define-binary-class data-mixin ()
   ((data (raw-bytes :size (data-size (current-binary-object))))))
+
+(define-binary-class full-bbox (full-bbox-header skippable-data-mixin) ())
+
+(define-binary-class data-bbox (bbox data-mixin) ())
 
 (defmethod calculate-size + ((box data-bbox))
   (+ (length (data box))))
@@ -157,8 +161,10 @@
   (:writer (out value)
            (write-boxes out value)))
 
-(define-binary-class iso-container ()
+(define-binary-class container-mixin ()
   ((children box-list)))
+
+(define-binary-class iso-container (container-mixin) ())
 
 (defmethod update-size ((object iso-container)))
 
@@ -321,8 +327,16 @@
 
 (defmethod header-size + ((obj apple-data-bbox-header)) 4)
 
-(define-binary-class apple-data-bbox (apple-data-bbox-header)
-  ((data (raw-bytes :size (data-size (current-binary-object))))))
+(define-binary-class apple-data-bbox (apple-data-bbox-header data-mixin) ())
+
+(defmethod calculate-size + ((box apple-data-bbox))
+  (+ (length (data box))))
+
+(define-binary-class apple-string-bbox (apple-data-bbox-header)
+  ((data (iso-8859-1-string :length (data-size (current-binary-object))))))
+
+(defmethod calculate-size + ((box apple-string-bbox))
+  (+ (length (data box))))
 
 (define-binary-class itunes-track-number-bbox (apple-data-bbox-header)
   ((pad1 u2)
@@ -337,10 +351,9 @@
   ((pad1 u2)
    (disk-num u2)
    (disk-count u2)
-   (pad2 u2)
    (data (raw-bytes :size (data-size (current-binary-object))))))
 
-(defmethod header-size + ((obj itunes-disk-number-bbox)) 8)
+(defmethod header-size + ((obj itunes-disk-number-bbox)) 6)
 
 (defparameter *copyright-symbol-string* (string (code-char 169)))
 
@@ -394,9 +407,10 @@
   (:method ((box-type (eql (make-copyright-symbol-symbol "too")))) 'container-bbox))
 
 (defgeneric find-data-box-class (box-type parent-type)
-  (:method (box-type parent) 'data-bbox)
+  (:method (box-type parent) 'apple-data-bbox)
   (:method (box-type (parent (eql '|trkn|))) 'itunes-track-number-bbox)
-  (:method (box-type (parent (eql '|disk|))) 'apple-data-bbox))
+  (:method (box-type (parent (eql '|disk|))) 'itunes-disk-number-bbox)
+  (:method (box-type (parent (eql (make-copyright-symbol-symbol "nam")))) 'apple-string-bbox))
 
 ;;;
 ;;; functions to access data in iso-containers
@@ -412,10 +426,6 @@
 (defun itunes-container-box (iso-container type)
   (reduce #'(lambda (x y) (when x (find-child x y)))
           (list iso-container "moov" "udta" "meta" "ilst" type "data")))
-
-(defun itunes-container-box-info (iso-container type)
-  (let ((box (itunes-container-box iso-container type)))
-    (when box (data box))))
 
 (macrolet 
     ((defitunes-getter (accessor-name accessor-type)
