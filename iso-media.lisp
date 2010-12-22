@@ -394,7 +394,7 @@
   (:method ((box-type (eql (make-copyright-symbol-symbol "too")))) 'container-bbox))
 
 (defgeneric find-data-box-class (box-type parent-type)
-  (:method (box-type parent) (progn (print parent) 'data-bbox))
+  (:method (box-type parent) 'data-bbox)
   (:method (box-type (parent (eql '|trkn|))) 'itunes-track-number-bbox)
   (:method (box-type (parent (eql '|disk|))) 'apple-data-bbox))
 
@@ -415,7 +415,6 @@
 
 (defun itunes-container-box-info (iso-container type)
   (let ((box (itunes-container-box iso-container type)))
-    (print (flags box))
     (when box (data box))))
 
 (macrolet 
