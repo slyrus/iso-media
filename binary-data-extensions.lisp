@@ -29,6 +29,12 @@
 
 (define-binary-type u8 () (unsigned-integer :bytes 8 :bits-per-byte 8))
 
+(defmethod read-value ((type list) in &rest args)
+  (apply #'read-value (first type) in (append (rest type) args)))
+
+(defmethod write-value ((type list) out value &rest args)
+  (apply #'write-value (first type) out value (append (rest type) args)))
+
 (define-binary-type optional (type if)
   (:reader (in)
            (when if (read-value type in)))
@@ -40,3 +46,15 @@
            (read-value choose in))
   (:writer (out value)
            (write-value choose out value)))
+
+(define-binary-type array (type size)
+  (:reader (in)
+           (let ((arr (make-array size :element-type type)))
+             (dotimes (i size)
+               (setf (elt arr i)
+                     (read-value type in)))
+             arr))
+  (:writer (out value)
+           (dotimes (i (length value))
+             (write-value type out (elt value i)))))
+
