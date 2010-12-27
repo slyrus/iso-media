@@ -53,7 +53,7 @@
    (large-size (optional :type 'u8 :if (large-size-p size)))
    (user-type (optional :type '(raw-bytes :size 16)
                         :if (equal box-type "uuid"))))
-  (:dispatch 
+  (:dispatch
    ;; unfortunately, Apple chose to encode iTunes metadata not
    ;; directly in specific boxes, but rather in generic |data| boxes
    ;; which are enclosed by boxes whose type defines the layout of the
@@ -132,9 +132,9 @@
 (define-binary-class data-mixin ()
   ((data (raw-bytes :size (data-size (current-binary-object))))))
 
-(define-binary-class full-bbox (full-bbox-header skippable-data-mixin) ())
+(define-binary-class full-bbox (skippable-data-mixin full-bbox-header) ())
 
-(define-binary-class data-bbox (bbox data-mixin) ())
+(define-binary-class data-bbox (data-mixin bbox) ())
 
 (defmethod calculate-size + ((box data-bbox))
   (+ (length (data box))))
@@ -229,7 +229,7 @@
 (defmethod calculate-size + ((box sample-description-bbox))
   (+ (reduce #'+ (map 'list #'size (children box)))))
 
-(defparameter *read-movie-data* nil)
+(defparameter *read-movie-data* t)
 
 (define-binary-class movie-data-bbox (full-bbox-header)
   ((data (skippable-raw-bytes :size (data-size (current-binary-object))
@@ -327,7 +327,7 @@
 
 (defmethod header-size + ((obj apple-data-bbox-header)) 4)
 
-(define-binary-class apple-data-bbox (apple-data-bbox-header data-mixin) ())
+(define-binary-class apple-data-bbox (data-mixin apple-data-bbox-header) ())
 
 (defmethod calculate-size + ((box apple-data-bbox))
   (+ (length (data box))))
@@ -355,6 +355,58 @@
 
 (defmethod header-size + ((obj itunes-disk-number-bbox)) 6)
 
+(define-binary-class sample-chunk-descriptor ()
+  ((first-chunk u4)
+   (samples-per-chunk u4)
+   (sample-description-index u4)))
+
+
+;;; 8.17 Sample Size Boxes
+
+;;; SampleSizeBox - stsz
+(define-binary-class sample-size-box (full-bbox-header)
+  ((sample-size u4)
+   (sample-count u4)
+   (entry-sizes
+    (optional
+     :type `(array :type u4 :size ,sample-count)
+     :if (= sample-size 0)))))
+
+(defmethod calculate-size + ((box sample-to-chunk-box))
+           (+ 4 (* (length (sample-chunk-descriptors box)) 12)))
+
+;;;
+;;; 8.18 Sample to Chunk Box
+
+;;; SampleToChunkBox - stsc
+(define-binary-class sample-to-chunk-box (full-bbox-header)
+  ((entry-count u4)
+   (sample-chunk-descriptors (array :type 'sample-chunk-info :size entry-count))))
+
+(defmethod calculate-size + ((box sample-to-chunk-box))
+           (+ 4 (* (length (sample-chunk-descriptors box)) 12)))
+
+;;;
+;;; 8.19 Chunk Offset Box
+
+;;; ChunkOffsetBox - stco
+(define-binary-class chunk-offset-box (full-bbox-header)
+  ((entry-count u4)
+   (chunk-offsets (array :type 'u4 :size entry-count))))
+
+(defmethod calculate-size + ((box chunk-offset-box))
+           (+ 4 (* (length (chunk-offsets box)) 4)))
+
+;;; ChunkLargeOffsetBox - co64
+(define-binary-class chunk-large-offset-box (full-bbox-header)
+  ((entry-count u4)
+   (chunk-offsets (array :type 'u8 :size entry-count))))
+
+(defmethod calculate-size + ((box chunk-large-offset-box))
+           (+ 4 (* (length (chunk-offsets box)) 8)))
+
+
+;;;
 (defparameter *copyright-symbol-string* (string (code-char 169)))
 
 (defun make-copyright-symbol-string (suffix)
@@ -404,7 +456,11 @@
   (:method ((box-type (eql '|sosn|))) 'container-bbox)
   (:method ((box-type (eql (make-copyright-symbol-symbol "lyr")))) 'container-bbox)
   (:method ((box-type (eql '|covr|))) 'container-bbox)
-  (:method ((box-type (eql (make-copyright-symbol-symbol "too")))) 'container-bbox))
+  (:method ((box-type (eql (make-copyright-symbol-symbol "too")))) 'container-bbox)
+  (:method ((box-type (eql '|stsz|))) 'sample-size-box)
+  (:method ((box-type (eql '|stsc|))) 'sample-to-chunk-box)
+  (:method ((box-type (eql '|stco|))) 'chunk-offset-box)
+  (:method ((box-type (eql '|co64|))) 'chunk-large-offset-box))
 
 (defgeneric find-data-box-class (box-type parent-type)
   (:method (box-type parent) 'apple-data-bbox)
@@ -449,6 +505,9 @@
   (reduce #'(lambda (x y) (when x (find-child x y)))
           (list iso-container "moov" "udta" "meta" "ilst" type "data")))
 
+(defparameter *track-name-symbol* (make-copyright-symbol-string "nam"))
+(defparameter *artist-symbol* (make-copyright-symbol-string "ART"))
+
 (macrolet 
     ((defitunes-getter (accessor-name accessor-type)
        `(defun ,accessor-name (iso-container)
@@ -483,6 +542,17 @@
   (defitunes-getter lyrics (make-copyright-symbol-string "lyr"))
   (defitunes-getter cover "covr")
   (defitunes-getter information (make-copyright-symbol-string "too")))
+
+(defun (setf track-name) (name iso-container)
+  (let ((ilst-box
+         (reduce #'(lambda (x y) (when x (find-child x y)))
+                 (list iso-container "moov" "udta" "meta" "ilst" *track-name-symbol*))))
+    (if ilst-box
+        (let ((data-box (find-child ilst-box "data")))
+          (if data-box
+              (progn
+                (setf (data data-box) name)
+                (update-size data-box)))))))
 
 (defun track-number (iso-container)
   (let ((box (itunes-container-box iso-container "trkn")))
