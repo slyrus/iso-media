@@ -71,8 +71,7 @@
 
 (defmethod print-object ((object bbox) stream)
   (print-unreadable-object (object stream :type t)
-    (with-slots ((size size)
-                 (box-type box-type)) object
+    (with-slots (size box-type) object
       (format stream "~s :size ~d" box-type size))))
 
 ;;
@@ -165,6 +164,10 @@
   ((children box-list)))
 
 (define-binary-class iso-container (container-mixin) ())
+
+(defmethod parent ((object iso-container)))
+
+(defmethod header-size + ((object iso-container)) 0)
 
 (defmethod update-size ((object iso-container)))
 
@@ -542,6 +545,30 @@
   (defitunes-getter lyrics (make-copyright-symbol-string "lyr"))
   (defitunes-getter cover "covr")
   (defitunes-getter information (make-copyright-symbol-string "too")))
+
+;;;
+
+(defun ancestors (box)
+  (labels ((%ancestors (box &optional acc)
+           (if (parent box)
+               (%ancestors (parent box) (cons (parent box) acc))
+               acc)))
+    (%ancestors box)))
+
+(defun elder-siblings (box)
+  (let ((parent (parent box)))
+    (when parent
+      (let* ((children (children parent))
+            (pos (position box children)))
+        (when pos
+          (subseq children 0 pos))))))
+
+(defun box-position (box &optional (offset 0))
+  (let ((offset1 (+ offset (reduce #'+ (mapcar #'size (elder-siblings box))))))
+    (with-accessors ((parent parent)) box
+      (if parent
+          (box-position parent (+ offset1 (header-size parent)))
+          offset1))))
 
 (defun (setf track-name) (name iso-container)
   (let ((ilst-box
