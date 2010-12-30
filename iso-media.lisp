@@ -234,7 +234,7 @@
 
 (defparameter *read-movie-data* t)
 
-(define-binary-class movie-data-bbox (full-bbox-header)
+(define-binary-class movie-data-bbox (bbox)
   ((data (skippable-raw-bytes :size (data-size (current-binary-object))
                               :predicate #'(lambda () *read-movie-data*)))))
 
@@ -569,6 +569,35 @@
       (if parent
           (box-position parent (+ offset1 (header-size parent)))
           offset1))))
+
+(defun reductions (function sequence &rest args)
+  (let ((l (list (first sequence))))
+    (apply #'reduce
+           (lambda (a b)
+             (let ((val (funcall function a b)))
+               (push val l)
+               val))
+           sequence
+           args)
+    (nreverse l)))
+
+(defun update-stco-box (iso-container)
+  (let ((stco (reduce #'find-child
+                      (list
+                       iso-container
+                       "moov" "trak" "mdia" "minf" "stbl" "stco")))
+        (mdat (find-child iso-container "mdat")))
+    (when (and stco mdat)
+      (let* ((offsets (chunk-offsets stco))
+             (deltas (loop for (a b)
+                        on (map 'list #'identity offsets)
+                        while b collect (- b a))))
+        (let ((new-offsets (reductions #'+ (cons (+ (box-position mdat)
+                                      (header-size mdat))
+                                   deltas))))
+          (setf (chunk-offsets stco)
+                (make-array (length new-offsets)
+                            :initial-contents new-offsets)))))))
 
 (defun (setf track-name) (name iso-container)
   (let ((ilst-box
