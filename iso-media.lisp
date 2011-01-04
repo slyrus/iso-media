@@ -363,6 +363,7 @@
    (samples-per-chunk u4)
    (sample-description-index u4)))
 
+(defparameter *sample-chunk-descriptor-size* 12)
 
 ;;; 8.17 Sample Size Boxes
 
@@ -375,8 +376,13 @@
      :type `(array :type u4 :size ,sample-count)
      :if (= sample-size 0)))))
 
-(defmethod calculate-size + ((box sample-to-chunk-box))
-           (+ 4 (* (length (sample-chunk-descriptors box)) 12)))
+(defmethod calculate-size + ((box sample-size-box))
+           (with-accessors ((sample-size sample-size)
+                            (sample-count sample-count))
+               box
+             (+ 8 (* (if (= sample-size 0)
+                         (* 4 sample-count)
+                         0)))))
 
 ;;;
 ;;; 8.18 Sample to Chunk Box
@@ -384,10 +390,11 @@
 ;;; SampleToChunkBox - stsc
 (define-binary-class sample-to-chunk-box (full-bbox-header)
   ((entry-count u4)
-   (sample-chunk-descriptors (array :type 'sample-chunk-info :size entry-count))))
+   (sample-chunk-descriptors (array :type 'sample-chunk-descriptor :size entry-count))))
 
 (defmethod calculate-size + ((box sample-to-chunk-box))
-           (+ 4 (* (length (sample-chunk-descriptors box)) 12)))
+           (+ 4 (* (length (sample-chunk-descriptors box))
+                   *sample-chunk-descriptor-size*)))
 
 ;;;
 ;;; 8.19 Chunk Offset Box
@@ -570,8 +577,8 @@
           (box-position parent (+ offset1 (header-size parent)))
           offset1))))
 
-(defun reductions (function sequence &rest args)
-  (let ((l (list (first sequence))))
+(defun reductions (function sequence &rest args &key initial-value)
+  (let ((l (list (or initial-value (first sequence)))))
     (apply #'reduce
            (lambda (a b)
              (let ((val (funcall function a b)))
@@ -581,6 +588,11 @@
            args)
     (nreverse l)))
 
+;;;
+;;; We have to update the stco (Sample-to-Chunk-Offset) box if we make
+;;; changes to the boxes because the stco box has absolute (in
+;;; file-relative position) offsets of the files chunks (which are, we
+;;; assume, stored in the mdat box).
 (defun update-stco-box (iso-container)
   (let ((stco (reduce #'find-child
                       (list
@@ -606,9 +618,13 @@
     (if ilst-box
         (let ((data-box (find-child ilst-box "data")))
           (if data-box
-              (progn
+              (prog1
                 (setf (data data-box) name)
-                (update-size data-box)))))))
+                (update-size data-box)
+                (update-stco-box iso-container))
+              ;; FIXME!!
+              ;; add code for adding the data-box if it doesn't exist here!
+              )))))
 
 (defun track-number (iso-container)
   (let ((box (itunes-container-box iso-container "trkn")))
