@@ -206,8 +206,7 @@
    (reserved-1 u4)
    (reserved-2 u4)
    (reserved-3 u4)
-   (name (optional :type 'terminated-string
-                   :if (plusp (data-size (current-binary-object)))))
+   (name terminated-string)
    (data (skippable-raw-bytes :size (data-size (current-binary-object))
                               :predicate #'(lambda () (constantly nil))))))
 
