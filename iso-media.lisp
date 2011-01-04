@@ -494,7 +494,7 @@
      (|sonm| . apple-string-bbox)
      (|soar| . apple-string-bbox)
      (|soaa| . apple-string-bbox)
-     (|soal| . pple-string-bbox)
+     (|soal| . apple-string-bbox)
      (|soco| . apple-string-bbox)
      (|sosn| . apple-string-bbox)
      (|tvsh| . apple-string-bbox))))
