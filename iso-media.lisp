@@ -207,8 +207,11 @@
    (reserved-2 u4)
    (reserved-3 u4)
    (name terminated-string)
-   (data (skippable-raw-bytes :size (data-size (current-binary-object))
-                              :predicate #'(lambda () (constantly nil))))))
+   (data 
+    (optional
+     :type `(skippable-raw-bytes :size ,(data-size (current-binary-object))
+                                 :predicate ,#'(lambda () (constantly nil)))
+     :if (plusp (data-size (current-binary-object)))))))
 
 (defmethod header-size + ((obj handler-bbox))
            (+ 20
