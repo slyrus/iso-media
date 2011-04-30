@@ -647,13 +647,24 @@
   (with-open-file (stream file :element-type '(unsigned-byte 8))
     (read-iso-media-stream stream)))
 
-(defun write-iso-media-stream (stream obj)
+(defun optimize-iso-container (iso-container)
+  (let ((mdat (find-child iso-container "mdat")))
+    (when mdat
+      (let ((children (remove mdat (children iso-container))))
+        (setf (children iso-container)
+              (append children (list mdat)))))))
+
+(defun write-iso-media-stream (stream obj &key (optimize t))
+  (when optimize
+    (optimize-iso-container obj)
+    (update-stco-box obj))
   (write-value 'iso-container stream obj))
 
-(defun write-iso-media-file (file obj)
+(defun write-iso-media-file (file obj &key (optimize t optimize-supplied-p))
   (with-open-file (out file 
                        :direction :output
                        :if-exists :supersede
                        :element-type '(unsigned-byte 8))
-    (write-iso-media-stream out obj)))
+    (apply #'write-iso-media-stream out obj
+           (when optimize-supplied-p `(:optimize ,optimize)))))
 
