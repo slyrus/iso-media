@@ -17,30 +17,38 @@ Dependencies
 
 ## binary-data
 
-* github page: [https://github.com/slyrus/monkeylib-binary-data/tree/alexandria](https://github.com/slyrus/monkeylib-binary-data/tree/alexandria)
-* git source repository: [git://github.com/slyrus/monkeylib-binary-data.git](git://github.com/slyrus/monkeylib-binary-data.git)
+* github page: [https://github.com/gigamonkey/monkeylib-binary-data](https://github.com/gigamonkey/monkeylib-binary-data)
+* git source repository: [git://github.com/gigamonkey/monkeylib-binary-data.git](git://github.com/gigamonkey/monkeylib-binary-data.git)
 
 ## alexandria
 
 * common-lisp.net page: [http://common-lisp.net/project/alexandria/](http://common-lisp.net/project/alexandria/)
 * git source repository: [http://common-lisp.net/gitweb?p=projects/alexandria/alexandria.git;a=summary](http://common-lisp.net/gitweb?p=projects/alexandria/alexandria.git;a=summary)
 
-alexandria is available through quicklisp and it is the hope of the
-author that both binary-data and iso-media are available through
+alexandria and binary-data are available through quicklisp and it is
+the hope of the author that iso-media will be available through
 quicklisp in the near future.
 
-NOTE
-====
-
-The iso-media library depends on a fork of said library that uses the
-alexandria library instead of Peter Seibel's monkeylib-macro-utilities
-library. Hopefully the core binary-data library will incorporate this
-change in the near future.
 
 Using iso-media
 ===============
 
-TBW
+To load iso-media:
 
-Cyrus Harmon
-ch-lisp@bobobeach.com
+    (asdf:load-system 'iso-media)
+
+iso-media Example
+=================
+
+    ISO-MEDIA-TEST> (defpackage #:iso-media-test (:use #:cl #:iso-media))
+    #<PACKAGE "ISO-MEDIA-TEST">
+    ISO-MEDIA-TEST> (in-package #:iso-media-test)
+    #<PACKAGE "ISO-MEDIA-TEST">
+    ISO-MEDIA-TEST> (defparameter *tears-of-rage*
+      (iso-media:read-iso-media-file "/Users/sly/projects/iso-media/test/tears-of-rage.m4a"))
+    *TEARS-OF-RAGE*
+    ISO-MEDIA-TEST> *tears-of-rage*
+    #<ISO-CONTAINER :children (#<DATA-BBOX "ftyp" :size 24>
+                               #<MOVIE-DATA-BBOX "mdat" :size 4822003>
+                               #<CONTAINER-BBOX "moov" :size 58303>)>
+
