@@ -15,6 +15,9 @@
            #:find-child
            #:filter-children
 
+           #:optimize-iso-container
+           #:iso-container-optimized-p
+           
            #:read-iso-media-stream
            #:read-iso-media-file
            #:write-iso-media-stream

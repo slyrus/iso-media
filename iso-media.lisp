@@ -654,6 +654,12 @@
         (setf (children iso-container)
               (append children (list mdat)))))))
 
+(defun iso-container-optimized-p (iso-container)
+  (not (find "mdat"
+             (butlast (children iso-container))
+             :key #'box-type
+             :test #'equal)))
+
 (defun write-iso-media-stream (stream obj &key (optimize t))
   (when optimize
     (optimize-iso-container obj)
