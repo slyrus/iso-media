@@ -16,6 +16,10 @@
 (cl:in-package #:iso-media)
 
 (defgeneric find-child (node type))
+
+;; FIXME! Does we need ways to insert-before/after existing children?
+(defgeneric append-child (node child))
+
 (defgeneric filter-children (node type))
 
 ;;
@@ -116,7 +120,7 @@
 (defmethod data-size ((obj bbox))
   (- (size obj) (header-size obj)))
 
-;; The spec defines a "full box" which contains additionl fields for a
+;; The spec defines a "full box" which contains additional fields for a
 ;; version and various flags. 
 (define-binary-class full-bbox-header (bbox)
   ((version u1)
@@ -184,6 +188,11 @@
 
 (defmethod find-child ((node bbox) type)
   (find type (children node) :key #'box-type :test #'equal))
+
+(defmethod append-child ((node bbox) child)
+  (if (children node)
+      (rplacd (last (children node)) (list child))
+      (setf (children node) (list child))))
 
 (defmethod filter-children ((node bbox) type)
   (remove-if-not (lambda (x) (equal x type))
@@ -525,10 +534,9 @@
        `(defun ,accessor-name (iso-container)
           (let ((box (itunes-container-box iso-container ,accessor-type)))
             (when box
-              
               (cond 
                 ((and (= (flags box) 1)
-                      (eql (type-of box) 'apple-data-box))
+                      (eql (type-of box) 'apple-data-bbox))
                  (map 'string #'code-char
                       (data box)))
                 (t (data box))))))))
@@ -615,18 +623,37 @@
 
 (defun (setf track-name) (name iso-container)
   (let ((ilst-box
-         (reduce #'(lambda (x y) (when x (find-child x y)))
-                 (list iso-container "moov" "udta" "meta" "ilst" *track-name-symbol*))))
-    (if ilst-box
-        (let ((data-box (find-child ilst-box "data")))
-          (if data-box
-              (prog1
-                (setf (data data-box) name)
-                (update-size data-box)
-                (update-stco-box iso-container))
-              ;; FIXME!!
-              ;; add code for adding the data-box if it doesn't exist here!
-              )))))
+         (reduce #'(lambda (x y) (when x (describe x) (find-child x y)))
+                 (list iso-container "moov" "udta" "meta" "ilst"))))
+    (when ilst-box
+      (describe ilst-box)
+      (describe (first (children ilst-box)))
+      (let ((track-name-box
+             (or (find-child ilst-box *track-name-symbol*)
+                 (let ((box (make-instance 'container-bbox :size 0
+                                           :box-type *track-name-symbol*
+                                           :children nil
+                                           :large-size nil
+                                           :user-type nil)))
+                   (append-child ilst-box box)
+                   (setf (parent box) ilst-box)
+                   box))))
+        (let ((data-box
+               (or (find-child track-name-box "data")
+                   (let ((box (make-instance 'apple-string-bbox :size 0
+                                             :box-type "data"
+                                             :version 0
+                                             :flags 0
+                                             :pad 0
+                                             :large-size nil
+                                             :user-type nil)))
+                     (append-child track-name-box box)
+                     (setf (parent box) track-name-box)
+                     box))))
+          (prog1
+              (setf (data data-box) name)
+            (update-size data-box)
+            (update-stco-box iso-container)))))))
 
 (defun track-number (iso-container)
   (let ((box (itunes-container-box iso-container "trkn")))
@@ -672,5 +699,6 @@
                        :if-exists :supersede
                        :element-type '(unsigned-byte 8))
     (apply #'write-iso-media-stream out obj
-           (when optimize-supplied-p `(:optimize ,optimize)))))
+           (when optimize-supplied-p `(:optimize ,optimize)))
+    file))
 
