@@ -20,6 +20,8 @@
 ;; FIXME! Does we need ways to insert-before/after existing children?
 (defgeneric append-child (node child))
 
+(defgeneric remove-child (node child))
+
 (defgeneric filter-children (node type))
 
 ;;
@@ -193,6 +195,10 @@
   (if (children node)
       (rplacd (last (children node)) (list child))
       (setf (children node) (list child))))
+
+(defmethod remove-child ((node bbox) child)
+  (setf (children node)
+        (remove child (children node))))
 
 (defmethod filter-children ((node bbox) type)
   (remove-if-not (lambda (x) (equal x type))
@@ -528,6 +534,7 @@
 
 (defparameter *track-name-symbol* (make-copyright-symbol-string "nam"))
 (defparameter *artist-symbol* (make-copyright-symbol-string "ART"))
+(defparameter *album-artist-symbol* "aART")
 
 (macrolet 
     ((defitunes-getter (accessor-name accessor-type)
@@ -562,6 +569,69 @@
   (defitunes-getter lyrics (make-copyright-symbol-string "lyr"))
   (defitunes-getter cover "covr")
   (defitunes-getter information (make-copyright-symbol-string "too")))
+
+(macrolet 
+    ((defitunes-setter (accessor-name accessor-type)
+       `(defun (setf ,accessor-name) (value iso-container)
+          (let ((ilst-box
+                 (reduce #'(lambda (x y) (when x (find-child x y)))
+                         (list iso-container "moov" "udta" "meta" "ilst"))))
+            (when ilst-box
+              (if value
+                  (let ((container-box
+                         (or (find-child ilst-box ,accessor-type)
+                             (let ((box (make-instance 'container-bbox :size 0
+                                                       :box-type ,accessor-type
+                                                       :children nil
+                                                       :large-size nil
+                                                       :user-type nil)))
+                               (append-child ilst-box box)
+                               (setf (parent box) ilst-box)
+                               box))))
+                    (let ((data-box
+                           (or (find-child container-box "data")
+                               (let ((box (make-instance 'apple-string-bbox :size 0
+                                                         :box-type "data"
+                                                         :version 0
+                                                         :flags 0
+                                                         :pad 0
+                                                         :large-size nil
+                                                         :user-type nil)))
+                                 (append-child container-box box)
+                                 (setf (parent box) container-box)
+                                 box))))
+                      (prog1
+                          (setf (data data-box) value)
+                        (update-size data-box)
+                        (update-stco-box iso-container))))
+                  ;; FIXME! Removing boxes breaks things horribly!!
+                  (let ((container-box
+                         (find-child ilst-box ,accessor-type)))
+                    (when container-box
+                      (remove-child ilst-box container-box)
+                      (update-stco-box iso-container)))))))))
+  (defitunes-setter track-name (make-copyright-symbol-string "nam"))
+  (defitunes-setter artist (make-copyright-symbol-string "ART"))
+  (defitunes-setter album-artist "aART")
+  (defitunes-setter album-name (make-copyright-symbol-string "alb"))
+  (defitunes-setter grouping (make-copyright-symbol-string "grp"))
+  (defitunes-setter year-of-publication (make-copyright-symbol-string "day"))
+  (defitunes-setter tempo "tmpo")
+  (defitunes-setter composer-name (make-copyright-symbol-string "wrt"))
+  (defitunes-setter comments (make-copyright-symbol-string "cmt"))
+  (defitunes-setter genre (make-copyright-symbol-string "gen"))
+  (defitunes-setter genre-code "gnre")
+  (defitunes-setter compilation-part "cpil")
+  (defitunes-setter show-name "tvsh")
+  (defitunes-setter sort-track-name "sonm")
+  (defitunes-setter sort-artist "soar")
+  (defitunes-setter sort-album-artist "soaa")
+  (defitunes-setter sort-album-name "soal")
+  (defitunes-setter sort-composer-name "soco")
+  (defitunes-setter sort-show-name "sosn")
+  (defitunes-setter lyrics (make-copyright-symbol-string "lyr"))
+  (defitunes-setter cover "covr")
+  (defitunes-setter information (make-copyright-symbol-string "too")))
 
 ;;;
 
@@ -620,40 +690,6 @@
           (setf (chunk-offsets stco)
                 (make-array (length new-offsets)
                             :initial-contents new-offsets)))))))
-
-(defun (setf track-name) (name iso-container)
-  (let ((ilst-box
-         (reduce #'(lambda (x y) (when x (describe x) (find-child x y)))
-                 (list iso-container "moov" "udta" "meta" "ilst"))))
-    (when ilst-box
-      (describe ilst-box)
-      (describe (first (children ilst-box)))
-      (let ((track-name-box
-             (or (find-child ilst-box *track-name-symbol*)
-                 (let ((box (make-instance 'container-bbox :size 0
-                                           :box-type *track-name-symbol*
-                                           :children nil
-                                           :large-size nil
-                                           :user-type nil)))
-                   (append-child ilst-box box)
-                   (setf (parent box) ilst-box)
-                   box))))
-        (let ((data-box
-               (or (find-child track-name-box "data")
-                   (let ((box (make-instance 'apple-string-bbox :size 0
-                                             :box-type "data"
-                                             :version 0
-                                             :flags 0
-                                             :pad 0
-                                             :large-size nil
-                                             :user-type nil)))
-                     (append-child track-name-box box)
-                     (setf (parent box) track-name-box)
-                     box))))
-          (prog1
-              (setf (data data-box) name)
-            (update-size data-box)
-            (update-stco-box iso-container)))))))
 
 (defun track-number (iso-container)
   (let ((box (itunes-container-box iso-container "trkn")))
