@@ -78,7 +78,8 @@
 (defmethod print-object ((object bbox) stream)
   (print-unreadable-object (object stream :type t)
     (with-slots (size box-type) object
-      (format stream "~s :size ~d" box-type size))))
+      (format stream "~s :position ~d :size ~d"
+              box-type (box-position object) size))))
 
 ;;
 ;; Determining the size of the box header is a bit tricky. There are
@@ -115,6 +116,8 @@
     (+ 8
        (if large-size 4 0)
        (if user-type 16 0))))
+
+(defgeneric data-size (object))
 
 ;; For our default (non-container) box, the size of the actual data
 ;; for the box will be the size of the box minus the size of the
@@ -177,10 +180,13 @@
 
 (defmethod update-size ((object iso-container)))
 
+(defparameter *print-box-children* t)
+
 (defmethod print-object ((object iso-container) stream)
   (print-unreadable-object (object stream :type t)
     (with-slots (children) object
-      (format stream ":children ~a" children))))
+      (pprint-logical-block (stream nil)
+        (format stream ":children ~a" children)))))
 
 (defmethod find-child ((node iso-container) type)
   (find type
@@ -207,6 +213,17 @@
 
 (define-binary-class full-container-bbox (full-bbox-header)
   ((children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod print-object ((object full-container-bbox) stream)
+  (print-unreadable-object (object stream :type t)
+    (with-slots (size box-type) object
+      (pprint-logical-block (stream nil)
+        (format stream "~s :position ~d :size ~d"
+                box-type (box-position object) size)
+        (when *print-box-children*
+          (loop for child in (children object)
+             do (pprint-newline :linear stream)
+               (format stream "~x" child)))))))
 
 (defmethod calculate-size + ((box full-container-bbox))
   (reduce #'+ (map 'list #'size (children box))))
@@ -236,6 +253,17 @@
 
 (define-binary-class container-bbox (bbox)
   ((children (box-list :limit (data-size (current-binary-object))))))
+
+(defmethod print-object ((object container-bbox) stream)
+  (print-unreadable-object (object stream :type t)
+    (with-slots (size box-type) object
+      (pprint-logical-block (stream nil)
+        (format stream "~s :position ~d :size ~d"
+                box-type (box-position object) size)
+        (when *print-box-children*
+          (loop for child in (children object)
+             do (pprint-newline :linear stream)
+               (format stream "~x" child)))))))
 
 (defmethod calculate-size + ((box container-bbox))
   (reduce #'+ (map 'list #'size (children box))))
@@ -532,10 +560,6 @@
   (reduce #'(lambda (x y) (when x (find-child x y)))
           (list iso-container "moov" "udta" "meta" "ilst" type "data")))
 
-(defparameter *track-name-symbol* (make-copyright-symbol-string "nam"))
-(defparameter *artist-symbol* (make-copyright-symbol-string "ART"))
-(defparameter *album-artist-symbol* "aART")
-
 (macrolet 
     ((defitunes-getter (accessor-name accessor-type)
        `(defun ,accessor-name (iso-container)
@@ -738,3 +762,6 @@
            (when optimize-supplied-p `(:optimize ,optimize)))
     file))
 
+;;; routines for dumping ISO file structure (debugging support?)
+;;; (defun dump-iso-container (container)
+;;;  )
