@@ -595,46 +595,61 @@
   (defitunes-getter cover "covr")
   (defitunes-getter information (make-copyright-symbol-string "too")))
 
+
+(defun make-data-box (iso-container accessor-type
+                      &key force-new-box (box-type 'apple-string-bbox))
+  (let ((ilst-box
+         (reduce #'(lambda (x y) (when x (find-child x y)))
+                 (list iso-container "moov" "udta" "meta" "ilst"))))
+    (when ilst-box
+      (let ((container-box
+             (or (find-child ilst-box accessor-type)
+                 (let ((box (make-instance 'container-bbox :size 0
+                                           :box-type accessor-type
+                                           :children nil
+                                           :large-size nil
+                                           :user-type nil)))
+                   (append-child ilst-box box)
+                   (setf (parent box) ilst-box)
+                   box))))
+        (when force-new-box
+          (loop for b in (children container-box)
+             do (remove-child container-box b)))
+        (let ((data-box
+               (or (find-child container-box "data")
+                   (let ((box (make-instance box-type :size 0
+                                             :box-type "data"
+                                             :version 0
+                                             :flags 0
+                                             :pad 0
+                                             :large-size nil
+                                             :user-type nil)))
+                     (append-child container-box box)
+                     (setf (parent box) container-box)
+                     box))))
+          (values data-box ilst-box))))))
+
 (macrolet 
-    ((defitunes-setter (accessor-name accessor-type)
+    ((defitunes-setter (accessor-name accessor-type &key force-new-box)
        `(defun (setf ,accessor-name) (value iso-container)
-          (let ((ilst-box
-                 (reduce #'(lambda (x y) (when x (find-child x y)))
-                         (list iso-container "moov" "udta" "meta" "ilst"))))
-            (when ilst-box
-              (if value
-                  (let ((container-box
-                         (or (find-child ilst-box ,accessor-type)
-                             (let ((box (make-instance 'container-bbox :size 0
-                                                       :box-type ,accessor-type
-                                                       :children nil
-                                                       :large-size nil
-                                                       :user-type nil)))
-                               (append-child ilst-box box)
-                               (setf (parent box) ilst-box)
-                               box))))
-                    (let ((data-box
-                           (or (find-child container-box "data")
-                               (let ((box (make-instance 'apple-string-bbox :size 0
-                                                         :box-type "data"
-                                                         :version 0
-                                                         :flags 0
-                                                         :pad 0
-                                                         :large-size nil
-                                                         :user-type nil)))
-                                 (append-child container-box box)
-                                 (setf (parent box) container-box)
-                                 box))))
-                      (prog1
-                          (setf (data data-box) value)
-                        (update-size data-box)
-                        (update-stco-box iso-container))))
-                  ;; FIXME! Removing boxes breaks things horribly!!
-                  (let ((container-box
-                         (find-child ilst-box ,accessor-type)))
-                    (when container-box
-                      (remove-child ilst-box container-box)
-                      (update-stco-box iso-container)))))))))
+          (if value
+              (multiple-value-bind (data-box ilst-box)
+                  (make-data-box iso-container ,accessor-type :force-new-box ,force-new-box)
+                (if ilst-box
+                    (prog1
+                        (setf (data data-box) value)
+                      (update-size data-box)
+                      (update-stco-box iso-container))
+                    (error "Could not get ilst-box!")))
+              ;; FIXME! Removing boxes breaks things horribly!!
+              (let ((ilst-box
+                     (reduce #'(lambda (x y) (when x (find-child x y)))
+                             (list iso-container "moov" "udta" "meta" "ilst"))))
+                (let ((container-box
+                       (find-child ilst-box ,accessor-type)))
+                  (when container-box
+                    (remove-child ilst-box container-box)
+                    (update-stco-box iso-container))))))))
   (defitunes-setter track-name (make-copyright-symbol-string "nam"))
   (defitunes-setter artist (make-copyright-symbol-string "ART"))
   (defitunes-setter album-artist "aART" :force-new-box t)
