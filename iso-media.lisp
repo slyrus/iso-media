@@ -597,7 +597,9 @@
 
 
 (defun make-data-box (iso-container accessor-type
-                      &key force-new-box (box-type 'apple-string-bbox))
+                      &key force-new-box
+                      (box-type 'apple-string-bbox)
+                      (box-flags 1))
   (let ((ilst-box
          (reduce #'(lambda (x y) (when x (find-child x y)))
                  (list iso-container "moov" "udta" "meta" "ilst"))))
@@ -620,7 +622,7 @@
                    (let ((box (make-instance box-type :size 0
                                              :box-type "data"
                                              :version 0
-                                             :flags 0
+                                             :flags box-flags
                                              :pad 0
                                              :large-size nil
                                              :user-type nil)))
@@ -742,7 +744,9 @@
                                                     value-list
                                                     (list value-list))
         (multiple-value-bind (data-box ilst-box)
-            (make-data-box iso-container "trkn" :box-type 'itunes-track-number-bbox)
+            (make-data-box iso-container "trkn"
+                           :box-type 'itunes-track-number-bbox
+                           :box-flags 0)
           (if ilst-box
               (progn
                 (setf (pad1 data-box) 0)
