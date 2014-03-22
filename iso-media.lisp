@@ -736,6 +736,31 @@
             (when box
               (list (track-num box) (track-count box)))))
 
+(defun (setf track-number) (value-list iso-container)
+  (if value-list
+      (destructuring-bind (num &optional count) (if (listp value-list) 
+                                                    value-list
+                                                    (list value-list))
+        (multiple-value-bind (data-box ilst-box)
+            (make-data-box iso-container "trkn" :box-type 'itunes-track-number-bbox)
+          (if ilst-box
+              (progn
+                (setf (pad1 data-box) 0)
+                (setf (pad2 data-box) 0)
+                (setf (data data-box) nil)
+                (setf (track-num data-box) (if (numberp num)
+                                               num
+                                               (parse-integer num)))
+                (if count
+                    (setf (track-count data-box) (if (numberp count)
+                                                     count
+                                                     (parse-integer count)))
+                    (setf (track-count data-box) 0))
+                (update-size data-box)
+                (update-stco-box iso-container)
+                value-list)
+              (error "Could not get ilst-box!"))))))
+
 (defun disk-number (iso-container)
   (let ((box (itunes-container-box iso-container "disk")))
             (when box
