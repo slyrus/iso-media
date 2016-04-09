@@ -16,5 +16,4 @@
     :components
     ((:static-file "audio-test.mp4")))))
 
-
-
+;; (ql:quickload 'com.gigamonkeys.binary-data)

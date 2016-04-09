@@ -642,7 +642,7 @@
                         (setf (data data-box) value)
                       (update-size data-box)
                       (update-stco-box iso-container))
-                    (error "Could not get ilst-box!")))
+                    (error "Could not get ilst-box ~S." ,accessor-type)))
               ;; FIXME! Removing boxes breaks things horribly!!
               (let ((ilst-box
                      (reduce #'(lambda (x y) (when x (find-child x y)))
@@ -763,7 +763,7 @@
                 (update-size data-box)
                 (update-stco-box iso-container)
                 value-list)
-              (error "Could not get ilst-box!"))))))
+              (error "Could not get ilst-box trkn."))))))
 
 (defun disk-number (iso-container)
   (let ((box (itunes-container-box iso-container "disk")))
