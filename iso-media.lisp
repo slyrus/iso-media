@@ -380,12 +380,6 @@
 (defmethod calculate-size + ((box apple-data-bbox))
   (+ (length (data box))))
 
-(define-binary-class apple-string-bbox (apple-data-bbox-header)
-  ((data (iso-8859-1-string :length (data-size (current-binary-object))))))
-
-(defmethod calculate-size + ((box apple-string-bbox))
-  (+ (length (data box))))
-
 (define-binary-class itunes-track-number-bbox (apple-data-bbox-header)
   ((pad1 u2)
    (track-num u2)
@@ -528,23 +522,23 @@
    #'(lambda (type-and-class)
        (destructuring-bind (type . class) type-and-class
          (def-find-data-box-class-method type class)))
-   `((,(make-copyright-symbol-symbol "nam") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "ART") . apple-string-bbox)
-     (|aART| . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "alb") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "grp") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "day") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "wrt") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "cmt") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "lyr") . apple-string-bbox)
-     (,(make-copyright-symbol-symbol "too") . apple-string-bbox)
-     (|sonm| . apple-string-bbox)
-     (|soar| . apple-string-bbox)
-     (|soaa| . apple-string-bbox)
-     (|soal| . apple-string-bbox)
-     (|soco| . apple-string-bbox)
-     (|sosn| . apple-string-bbox)
-     (|tvsh| . apple-string-bbox))))
+   `((,(make-copyright-symbol-symbol "nam") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "ART") . apple-data-bbox)
+     (|aART| . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "alb") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "grp") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "day") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "wrt") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "cmt") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "lyr") . apple-data-bbox)
+     (,(make-copyright-symbol-symbol "too") . apple-data-bbox)
+     (|sonm| . apple-data-bbox)
+     (|soar| . apple-data-bbox)
+     (|soaa| . apple-data-bbox)
+     (|soal| . apple-data-bbox)
+     (|soco| . apple-data-bbox)
+     (|sosn| . apple-data-bbox)
+     (|tvsh| . apple-data-bbox))))
 
 ;;;
 ;;; functions to access data in iso-containers
@@ -598,7 +592,7 @@
 
 (defun make-data-box (iso-container accessor-type
                       &key force-new-box
-                      (box-type 'apple-string-bbox)
+                      (box-type 'apple-data-bbox)
                       (box-flags 1))
   (let ((ilst-box
          (reduce #'(lambda (x y) (when x (find-child x y)))
@@ -639,7 +633,8 @@
                   (make-data-box iso-container ,accessor-type :force-new-box ,force-new-box)
                 (if ilst-box
                     (prog1
-                        (setf (data data-box) value)
+                        (setf (data data-box)
+                              (babel:string-to-octets value))
                       (update-size data-box)
                       (update-stco-box iso-container))
                     (error "Could not get ilst-box ~S." ,accessor-type)))

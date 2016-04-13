@@ -5,7 +5,7 @@
   :version "0.0.1"
   :licence "BSD"
   :description "A library for reading ISO Media (such as MP4) Files"
-  :depends-on (com.gigamonkeys.binary-data)
+  :depends-on (com.gigamonkeys.binary-data babel)
   :serial t
   :components
   ((:cl-source-file "package")
@@ -17,3 +17,4 @@
     ((:static-file "audio-test.mp4")))))
 
 ;; (ql:quickload 'com.gigamonkeys.binary-data)
+;; (ql:quickload 'babel)
