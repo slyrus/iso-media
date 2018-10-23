@@ -123,7 +123,8 @@
 ;; for the box will be the size of the box minus the size of the
 ;; header.
 (defmethod data-size ((obj bbox))
-  (- (size obj) (header-size obj)))
+  (let ((size (or (large-size obj) (size obj))))
+    (- size (header-size obj))))
 
 ;; The spec defines a "full box" which contains additional fields for a
 ;; version and various flags. 
